@@ -40,7 +40,7 @@ struct Driver_Config {
 class Motor_Driver {
     // Set these methods to public to allow access and control from outside the class.
     public:
-        Motor_Driver(const Driver_Config &driver_setup);
+        explicit Motor_Driver(const Driver_Config &driver_setup);
         
         virtual ~Motor_Driver() = default;
 

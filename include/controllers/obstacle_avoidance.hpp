@@ -46,7 +46,7 @@ struct Avoid_Config {
 class Obstacle_Avoidance {
     // Set these methods to public to allow access and control from outside the class.
     public:
-        Obstacle_Avoidance(const Avoid_Config &avoid_setup);
+        explicit Obstacle_Avoidance(const Avoid_Config &avoid_setup);
 
         virtual ~Obstacle_Avoidance() = default;
 

@@ -60,7 +60,7 @@ struct Robot_Command {
 class Robot_Controller {
     // Set these methods to public to allow access and control from outside the class.
     public:
-        Robot_Controller(Drive_Train &train);
+        explicit Robot_Controller(Drive_Train &train);
 
         ~Robot_Controller() = default;
 

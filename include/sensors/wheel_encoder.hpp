@@ -55,7 +55,7 @@ struct Encoder_Config {
 class Wheel_Encoder {
     // Set these methods to public to allow access and control from outside the class.
     public:
-        Wheel_Encoder(const Encoder_Config &encoder_setup);
+        explicit Wheel_Encoder(const Encoder_Config &encoder_setup);
 
         virtual ~Wheel_Encoder() = default;
 
@@ -63,7 +63,7 @@ class Wheel_Encoder {
 
         virtual void reset_count();
         virtual double calculate_distance();
-        virtual double measure_velocity();
+        //virtual double measure_velocity();
 
         volatile uint32_t pulse_count = 0;
 

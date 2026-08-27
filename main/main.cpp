@@ -74,8 +74,8 @@ void Odometry_Task(void *arg) {
     uint32_t last_r_pulses = 0;
 
     // These are to record the distances traveled by the front left and the front right motors.
-    double l_distance = -1.0;
-    double r_distance = -1.0;
+    double l_distance{};
+    double r_distance{};
 
     // A flag to print the last log.
     bool stopped_recently = false;
@@ -134,14 +134,13 @@ void Odometry_Task(void *arg) {
 */
 void Obstacle_Avoidance_Task(void *arg) {
     Obstacle_Avoidance *o_avoid = static_cast<Obstacle_Avoidance*>(arg);
-    double current_distance = 1000.0;   // Set to 1000 to avoid bugs.
     static const char* TAG = "Obstacle_Avoidance_Task";
     static const char* TAG_1 = "Obstacle_Detected";
     bool stopped_recently = false;
 
     while (true) {
         // Reset the current distance and grab the new state.
-        current_distance = 1000.0;
+        double current_distance = 1000.0;   // Set to 1000 to avoid bugs.
         Robot_State current_state = o_avoid->config.controller->get_robot_state();
 
         // Use 1 of the 4 ultrasonic sensors based on the current state. Also get the distance

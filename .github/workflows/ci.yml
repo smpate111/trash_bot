@@ -1,0 +1,60 @@
+name: Trash Bot CI/CD Pipeline
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+jobs:
+    # ============================================================
+    # Job 1: Quality check on project code
+    # ============================================================
+    lint:
+        name: Code Quality Check
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4
+
+            - name: Install CPPCheck
+              run: sudo apt-get update && sudo apt-get install -y cppcheck
+            
+            - name: Run CPPCheck
+              run: cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem -I include/ main/
+
+    # ============================================================
+    # Job 2: Unit testing
+    # ============================================================
+    unit_test:
+        name: Unit Testing
+        runs-on: ubuntu-latest
+        container: espressif/idf:v6.0.2
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4
+
+            - name: Run Tests
+              run: |
+                . $IDF_PATH/export.sh
+                # Build and run C++ tests compiled for Linux target
+                idf.py --preview set-target linux
+                idf.py build
+                ./build/trash_bot.elf
+
+    #build:
+    #    name: Build Project
+    #    runs-on: ubuntu-latest
+
+    #    steps:
+    #        - name: Checkout Repository
+    #          uses: actions/checkout@v4
+    #          with:
+    #              submodules: 'recursive'
+
+    #        - name: Build Firmware
+    #          uses: espressif/esp-idf-ci-action@v1
+    #          with:
+    #              esp_idf_version: 'v6.0.2'
+    #              target: 'esp32s3'
+    #              path: '.'

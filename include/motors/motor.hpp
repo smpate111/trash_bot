@@ -52,7 +52,7 @@ struct Motor_Config {
 class Motor {
     // Set these methods to public to allow access and control from outside the class.
     public:
-        Motor(const Motor_Config &motor_setup);
+        explicit Motor(const Motor_Config &motor_setup);
         
         virtual ~Motor() = default;
 

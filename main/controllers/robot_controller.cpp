@@ -20,9 +20,10 @@
     ============================================================
 */
 Robot_Controller::Robot_Controller(Drive_Train &train) : 
-    drive_train(train), current_state(Robot_State::IDLE) {
-        // This queue holds up to 10 commands at a time.
-        command_queue = xQueueCreate(10, sizeof(Robot_Command));
+    drive_train(train),
+    current_state(Robot_State::IDLE),
+    command_queue(xQueueCreate(10, sizeof(Robot_Command)))  // Queue holds up to 10 commands at a time.
+    {
         ESP_LOGI(CONTROLLER_NAME, "Initialized controller with a command queue size of 10.");
 }
 //  ============================================================

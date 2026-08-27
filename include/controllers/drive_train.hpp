@@ -43,7 +43,7 @@ struct Train_Config {
 class Drive_Train {
     // Set these methods to public to allow access and control from outside the class.
     public:
-        Drive_Train(const Train_Config &train_setup);
+        explicit Drive_Train(const Train_Config &train_setup);
 
         virtual ~Drive_Train() = default;
 

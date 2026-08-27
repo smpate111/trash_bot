@@ -20,10 +20,7 @@
     channels.
     ============================================================
 */
-Motor::Motor(const Motor_Config &motor_setup) {
-    // Store the user-defined motor configurations.
-    config = motor_setup;
-
+Motor::Motor(const Motor_Config &motor_setup) : config(motor_setup) {
     // Configure the pins to be output pins.
     gpio_reset_pin(config.in1_pin);
     gpio_reset_pin(config.in2_pin);

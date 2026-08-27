@@ -98,9 +98,11 @@ double Wheel_Encoder::calculate_distance() {
     the revolutions per minute.
     ============================================================
 */
+/*
 double Wheel_Encoder::measure_velocity() {
     pulse_difference = pulse_count - last_pulse_count;
     last_pulse_count = pulse_count;
     return static_cast<double>((pulse_difference / config.encoder_slots) * 60.0);
 }
+*/
 //  ============================================================

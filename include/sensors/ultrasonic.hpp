@@ -55,7 +55,8 @@ struct Ultrasonic_Config {
 class Ultrasonic {
     // Set these methods to public to allow access and control from outside the class.
     public:
-        Ultrasonic(const Ultrasonic_Config &ultrasonic_setup);
+        explicit Ultrasonic(const Ultrasonic_Config &ultrasonic_setup);
+        
         virtual ~Ultrasonic() = default;
 
         static void IRAM_ATTR isr_handler(void *arg);
