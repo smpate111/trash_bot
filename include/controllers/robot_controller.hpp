@@ -75,8 +75,8 @@ class Robot_Controller {
         static constexpr const char* const CONTROLLER_NAME = "Robot Controller";
 
         Drive_Train &drive_train;
-        QueueHandle_t command_queue;
         Robot_State current_state;
+        QueueHandle_t command_queue;
 
         bool emergency_lockout = false;
 

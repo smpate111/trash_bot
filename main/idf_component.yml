@@ -14,4 +14,7 @@ dependencies:
   #   # `public` flag doesn't have an effect dependencies of the `main` component.
   #   # All dependencies of `main` are public by default.
   #   public: true
-  espressif/led_strip: ^3.0.3
+  espressif/led_strip:
+    version: "^3.0.3"
+    rules:
+      - if: "target != linux"

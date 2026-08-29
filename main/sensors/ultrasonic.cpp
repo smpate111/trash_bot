@@ -22,20 +22,10 @@
 Ultrasonic::Ultrasonic(const Ultrasonic_Config &ultrasonic_setup) : config(ultrasonic_setup) {
 
     // Set the ECHO and TRIG pins to input and output respectively.
-    gpio_reset_pin(config.echo_pin);
     gpio_reset_pin(config.trig_pin);
-    gpio_set_direction(config.echo_pin, GPIO_MODE_INPUT);
+    gpio_reset_pin(config.echo_pin);
     gpio_set_direction(config.trig_pin, GPIO_MODE_OUTPUT);
-
-    // Configure the ECHO pin.
-    gpio_config_t echo_config = {};
-    echo_config.pin_bit_mask = (1ULL << config.echo_pin);   // Set the pin's bit mask.
-    echo_config.mode = GPIO_MODE_INPUT;                     // Set the pin to be an input.
-    echo_config.pull_up_en = GPIO_PULLUP_DISABLE;           // Disable the pull-up resistor.
-    echo_config.pull_down_en = GPIO_PULLDOWN_DISABLE;       // Disable the pull-down resistor.
-    echo_config.intr_type = GPIO_INTR_ANYEDGE;              // Set the interrupt to trigger on both falling and rising edges.
-
-    gpio_config(&echo_config);
+    gpio_set_direction(config.echo_pin, GPIO_MODE_INPUT);
 
     // Configure the TRIG pin.
     gpio_config_t trigger_config = {};
@@ -47,6 +37,16 @@ Ultrasonic::Ultrasonic(const Ultrasonic_Config &ultrasonic_setup) : config(ultra
 
     gpio_config(&trigger_config);
     gpio_set_level(config.trig_pin, 0);    // Initially set the TRIG pin to low.
+
+    // Configure the ECHO pin.
+    gpio_config_t echo_config = {};
+    echo_config.pin_bit_mask = (1ULL << config.echo_pin);   // Set the pin's bit mask.
+    echo_config.mode = GPIO_MODE_INPUT;                     // Set the pin to be an input.
+    echo_config.pull_up_en = GPIO_PULLUP_DISABLE;           // Disable the pull-up resistor.
+    echo_config.pull_down_en = GPIO_PULLDOWN_DISABLE;       // Disable the pull-down resistor.
+    echo_config.intr_type = GPIO_INTR_ANYEDGE;              // Set the interrupt to trigger on both falling and rising edges.
+
+    gpio_config(&echo_config);
 
     ESP_LOGI(
         config.name.c_str(),
@@ -103,7 +103,7 @@ void Ultrasonic::measure_distance() {
     // Reset ECHO signal duration before sending new signal.
     start_echo = 0;
 
-    // Send TRIG pulse for 10us.
+    // Send TRIG pulse for 10us. This will trigger the ISR above.
     gpio_set_level(config.trig_pin, 1);
     esp_rom_delay_us(10);
     gpio_set_level(config.trig_pin, 0);
