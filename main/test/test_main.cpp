@@ -12,9 +12,9 @@
 */
 
 #include <test/mock_libraries/mock_hardware.hpp>
+#include <test/test_drive_train_logic.cpp>
 #include <test/test_motor_logic.cpp>
 #include <test/test_motor_driver_logic.cpp>
-//#include <test/test_drive_train_logic.cpp>
 #include <test/test_ultrasonic_logic.cpp>
 #include <test/test_wheel_encoder_logic.cpp>
 
@@ -96,7 +96,7 @@ extern "C" void app_main(void) {
     RUN_TEST(test_motor_driver_functions);
 
     // Test the controllers.
-    //RUN_TEST(test_drive_train_functions);
+    RUN_TEST(test_drive_train_functions);
     UNITY_END();
 
     // Exit the function once we performed all tests.

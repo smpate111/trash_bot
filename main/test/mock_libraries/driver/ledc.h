@@ -38,6 +38,10 @@ typedef int ledc_timer_bit_t;
 #define LEDC_CHANNEL_1      1
 #define LEDC_CHANNEL_2      2
 #define LEDC_CHANNEL_3      3
+#define LEDC_CHANNEL_4      4
+#define LEDC_CHANNEL_5      5
+#define LEDC_CHANNEL_6      6
+#define LEDC_CHANNEL_7      7
 #define LEDC_LOW_SPEED_MODE 0
 #define LEDC_TIMER_0        0
 
