@@ -38,19 +38,25 @@
 */
 void Navigation_Task(void *arg) {
     Robot_Controller *controller = static_cast<Robot_Controller*>(arg);
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    //vTaskDelay(pdMS_TO_TICKS(2000));
 
-    controller->send_command(Robot_State::MOVE_FORWARD, 255, 3000);
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    controller->send_command(Robot_State::BRAKE, 0, 2000);
 
-    controller->send_command(Robot_State::MOVE_BACKWARD, 255, 3000);
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    controller->send_command(Robot_State::MOVE_FORWARD, 255, 2000);
+    //vTaskDelay(pdMS_TO_TICKS(5000));
+    controller->send_command(Robot_State::BRAKE, 0, 2000);
 
-    controller->send_command(Robot_State::TURN_LEFT, 255, 3000);
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    controller->send_command(Robot_State::MOVE_BACKWARD, 255, 2000);
+    //vTaskDelay(pdMS_TO_TICKS(5000));
+    controller->send_command(Robot_State::BRAKE, 0, 2000);
 
-    controller->send_command(Robot_State::TURN_RIGHT, 255, 3000);
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    controller->send_command(Robot_State::TURN_LEFT, 255, 2000);
+    //vTaskDelay(pdMS_TO_TICKS(5000));
+    controller->send_command(Robot_State::BRAKE, 0, 2000);
+
+    controller->send_command(Robot_State::TURN_RIGHT, 255, 2000);
+    //vTaskDelay(pdMS_TO_TICKS(5000));
+    controller->send_command(Robot_State::BRAKE, 0, 2000);
 
     vTaskDelete(NULL);
     return;
@@ -175,9 +181,8 @@ void Obstacle_Avoidance_Task(void *arg) {
                 break;
 
             case Robot_State::BRAKE:
-            case Robot_State::IDLE:
                 if (stopped_recently == true) {
-                    ESP_LOGI(TAG, "Current movement is STOP. Not using any Ultrasonic Sensors.");
+                    ESP_LOGI(TAG, "Current movement is BRAKE. Not using any Ultrasonic Sensors.");
                     stopped_recently = false;
                 }
                 break;

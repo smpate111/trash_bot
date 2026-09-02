@@ -27,7 +27,6 @@
 */
 enum Robot_State {
     BRAKE,
-    IDLE,
     MOVE_FORWARD,
     MOVE_BACKWARD,
     TURN_LEFT,
@@ -65,7 +64,11 @@ class Robot_Controller {
         ~Robot_Controller() = default;
 
         void start_task();
+        
         void send_command(Robot_State state, uint32_t speed, uint32_t duration_ms);
+        Robot_Command execute_command(Robot_Command command);
+        Robot_Command process_command(Robot_Command current_command);
+        
         void emergency_stop();
         
         Robot_State get_robot_state();
@@ -78,7 +81,17 @@ class Robot_Controller {
         Robot_State current_state;
         QueueHandle_t command_queue;
 
+        TickType_t state_start_time = 0;
+
         bool emergency_lockout = false;
+
+        const char* state_strings[6] = {
+            "BRAKE",
+            "MOVE_FORWARD",
+            "MOVE_BACKWARD",
+            "TURN_LEFT",
+            "TURN_RIGHT"
+        };
 
         static void task_queue(void *arg);
 

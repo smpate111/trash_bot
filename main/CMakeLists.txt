@@ -18,6 +18,9 @@ if (IDF_TARGET STREQUAL "linux")
             "test/test_ultrasonic_logic.cpp"
             "test/test_wheel_encoder_logic.cpp"
 
+            "test/test_drive_train_logic.cpp"
+            "test/test_robot_controller_logic.cpp"
+
         INCLUDE_DIRS
             "."
             "../include"

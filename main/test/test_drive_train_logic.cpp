@@ -23,76 +23,89 @@
 
 /*
     ============================================================
-    Test the drive train class and its functions.
+    Helper function that creates the drive train object.
     ============================================================
 */
-void test_drive_train_functions(void) {
+Drive_Train create_drive_train() {
     // Create the motor objects.
-    Motor_Config fl_config = {
+    static Motor_Config fl_config = {
         "Front Left Motor",
         GPIO_NUM_11, GPIO_NUM_12,
         LEDC_CHANNEL_0, LEDC_CHANNEL_1
     };
 
-    Motor_Config fr_config = {
+    static Motor_Config fr_config = {
         "Front Right Motor",
         GPIO_NUM_13, GPIO_NUM_14,
         LEDC_CHANNEL_2, LEDC_CHANNEL_3
     };
 
-    Motor_Config bl_config = {
+    static Motor_Config bl_config = {
         "Back Left Motor",
         GPIO_NUM_6, GPIO_NUM_7,
         LEDC_CHANNEL_5, LEDC_CHANNEL_4
     };
 
-    Motor_Config br_config = {
+    static Motor_Config br_config = {
         "Back Right Motor",
         GPIO_NUM_15, GPIO_NUM_16,
         LEDC_CHANNEL_7, LEDC_CHANNEL_6
     };
 
-    Motor fl_motor(fl_config);
-    Motor fr_motor(fr_config);
-    Motor bl_motor(bl_config);
-    Motor br_motor(br_config);
+    static Motor fl_motor(fl_config);
+    static Motor fr_motor(fr_config);
+    static Motor bl_motor(bl_config);
+    static Motor br_motor(br_config);
 
     // Create the motor driver objects.
-    Driver_Config fd_config = {
+    static Driver_Config fd_config = {
         "Front Driver",
         fl_motor, fr_motor
     };
 
-    Driver_Config bd_config = {
+    static Driver_Config bd_config = {
         "Back Driver",
         bl_motor, br_motor
     };
 
-    Motor_Driver f_driver(fd_config);
-    Motor_Driver b_driver(bd_config);
+    static Motor_Driver f_driver(fd_config);
+    static Motor_Driver b_driver(bd_config);
 
     // Create the wheel encoder objects.
-    Encoder_Config le_config = {
+    static Encoder_Config le_config = {
         "Left Encoder", GPIO_NUM_1,
         80.0, 20
     };
 
-    Encoder_Config re_config = {
+    static Encoder_Config re_config = {
         "Right Encoder", GPIO_NUM_2,
         80.0, 20
     };
 
-    Wheel_Encoder l_encoder(le_config);
-    Wheel_Encoder r_encoder(re_config);
+    static Wheel_Encoder l_encoder(le_config);
+    static Wheel_Encoder r_encoder(re_config);
 
     // Configure the drive train object.
-    Train_Config t_config = {
+    static Train_Config t_config = {
         "Drive Train",
         f_driver, b_driver,
         &l_encoder, &r_encoder
     };
 
-    Drive_Train d_train(t_config);
+    return Drive_Train(t_config);
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the drive train class and its functions.
+    ============================================================
+*/
+void test_drive_train_functions(void) {
+    // Create the drive train object.
+    Drive_Train d_train = create_drive_train();
 
 
     /*
@@ -171,8 +184,12 @@ void test_drive_train_functions(void) {
     uint32_t pulses_per_second = 30;
 
     // Verify the pulse count is 0 before performing the count.
+    Wheel_Encoder l_encoder = d_train.get_left_encoder();
+    Wheel_Encoder r_encoder = d_train.get_right_encoder();
+
     l_encoder.reset_count();
     r_encoder.reset_count();
+    
     TEST_ASSERT_EQUAL(0, l_encoder.pulse_count);
     TEST_ASSERT_EQUAL(0, r_encoder.pulse_count);
 
@@ -234,7 +251,7 @@ void test_drive_train_functions(void) {
 
     /*
         ============================================================
-        Test 2: Check if the fake LEDC hardware is correctly called
+        Test 3: Check if the fake LEDC hardware is correctly called
         in move_backward(). Also verify the Interrupt Service Routine
         gets triggered and performs pulse counting.
         ============================================================
@@ -315,7 +332,7 @@ void test_drive_train_functions(void) {
 
     /*
         ============================================================
-        Test 3: Check if the fake LEDC hardware is correctly called
+        Test 4: Check if the fake LEDC hardware is correctly called
         in turn_left(). Also verify the Interrupt Service Routine
         gets triggered and performs pulse counting.
         ============================================================
@@ -396,7 +413,7 @@ void test_drive_train_functions(void) {
 
     /*
         ============================================================
-        Test 4: Check if the fake LEDC hardware is correctly called
+        Test 5: Check if the fake LEDC hardware is correctly called
         in turn_right(). Also verify the Interrupt Service Routine
         gets triggered and performs pulse counting.
         ============================================================
@@ -477,7 +494,7 @@ void test_drive_train_functions(void) {
     
     /*
         ============================================================
-        Test 5: Check if the fake LEDC hardware is correctly called
+        Test 6: Check if the fake LEDC hardware is correctly called
         in turn_right(). Also verify the Interrupt Service Routine
         gets triggered and performs pulse counting.
         ============================================================
