@@ -47,11 +47,28 @@ class Obstacle_Avoidance {
     // Set these methods to public to allow access and control from outside the class.
     public:
         explicit Obstacle_Avoidance(const Avoid_Config &avoid_setup);
-
         virtual ~Obstacle_Avoidance() = default;
+        void start_task();
+        double measure_object_distance(Robot_State current_state, double current_distance);
+        void determine_emergency_stop(double current_distance);
 
-        double distance_threshold = 50.0;
         Avoid_Config config;
+        const char* sensor_strings[4] = {
+            "FRONT",
+            "BACK",
+            "LEFT",
+            "RIGHT"
+        };
+
+    // Set these to private to prvent access and modifications from outside the class.
+    private:
+        static void task_queue(void *arg);
+        void avoidance_loop();
+
+        const char* TAG = "Obstacle_Avoidance_Task";
+        const char* TAG_1 = "Detected Object";
+        double distance_threshold = 50.0;
+        bool stopped_recently = true;
 };
 //  ============================================================
 

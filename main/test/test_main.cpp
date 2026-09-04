@@ -20,6 +20,7 @@
 
 #include <test/test_drive_train_logic.cpp>
 #include <test/test_robot_controller_logic.cpp>
+//#include <test/test_obstacle_avoidance_logic.cpp>
 //  ============================================================
 
 
@@ -53,6 +54,7 @@ DEFINE_FAKE_VALUE_FUNC(BaseType_t, xQueueReceive, QueueHandle_t, void*, TickType
 DEFINE_FAKE_VALUE_FUNC(BaseType_t, xQueueReset, QueueHandle_t);
 DEFINE_FAKE_VALUE_FUNC(BaseType_t, xTaskCreate, TaskFunction_t, const char*, uint32_t, void*, UBaseType_t, TaskHandle_t*);
 DEFINE_FAKE_VALUE_FUNC(TickType_t, xTaskGetTickCount);
+DEFINE_FAKE_VOID_FUNC(vTaskDelay, TickType_t);
 
 
 
@@ -83,6 +85,7 @@ void setUp(void) {
     RESET_FAKE(xQueueReset);
     RESET_FAKE(xTaskCreate);
     RESET_FAKE(xTaskGetTickCount);
+    RESET_FAKE(vTaskDelay);
 
     // Reset these custom fake functions to capture commands sent to the FreeRTOS queue.
     xQueueSend_fake.custom_fake = custom_xQueueSend;
@@ -123,6 +126,7 @@ extern "C" void app_main(void) {
     // Test the controllers.
     RUN_TEST(test_drive_train_functions);
     RUN_TEST(test_robot_controller_functions);
+    //RUN_TEST(test_obstacle_avoidance_functions);
 
     UNITY_END();
 

@@ -17,7 +17,7 @@
 #include <string>
 
 #include <../include/controllers/drive_train.hpp>
-#include <../include/controllers/obstacle_avoidance.hpp>
+//#include <../include/controllers/obstacle_avoidance.hpp>
 #include <../include/controllers/robot_controller.hpp>
 
 #include <../include/motors/motor.hpp>
@@ -138,6 +138,7 @@ void Odometry_Task(void *arg) {
     close to it.
     ============================================================
 */
+/*
 void Obstacle_Avoidance_Task(void *arg) {
     Obstacle_Avoidance *o_avoid = static_cast<Obstacle_Avoidance*>(arg);
     static const char* TAG = "Obstacle_Avoidance_Task";
@@ -204,6 +205,7 @@ void Obstacle_Avoidance_Task(void *arg) {
     vTaskDelete(NULL);
     return;
 }
+*/
 //  ============================================================
 
 
@@ -363,6 +365,7 @@ void app_main(void) {
     // Configure the robot controller by passing the drive train.
     Robot_Controller controller(d_train);
 
+    /*
     // Configure the obstacle avoidance by defining which ultrasonic sensors
     // and robot controller it is going to control.
     Avoid_Config a_config = {
@@ -373,6 +376,7 @@ void app_main(void) {
 
     // Initialize the obstacle avoidance.
     Obstacle_Avoidance o_avoid(a_config);
+    */
 
 
     // Set a 2 second delay to give the program time to configure the settings.
@@ -390,7 +394,7 @@ void app_main(void) {
     xTaskCreate(Odometry_Task, "Odometry_Task", 4096, &d_train, 4, nullptr);
 
     // Configure the obstacle avoidance task by passing the obstacle avoidance config.
-    xTaskCreate(Obstacle_Avoidance_Task, "Obstacle_Avoidance_Task", 4096, &o_avoid, 5, nullptr);
+    //xTaskCreate(Obstacle_Avoidance_Task, "Obstacle_Avoidance_Task", 4096, &o_avoid, 5, nullptr);
 
     while (true) {
         vTaskDelay(portMAX_DELAY);

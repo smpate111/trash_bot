@@ -23,9 +23,7 @@
 // Define a global variable that stores a copy of the command sent to the FreeRTOS queue during testing.
 Robot_Command sent_command;
 Robot_Command sent_emergency_command;
-
-// Define a global variable that stores the received command from the FreeRTOS queue.
-Robot_Command received_command;
+bool queue_received_command = false;
 
 
 
@@ -115,8 +113,10 @@ Drive_Train create_drive_train_1() {
 BaseType_t custom_xQueueSend(QueueHandle_t queue, const void *item, TickType_t ticks) {
     if (item != nullptr) {
         sent_command = *(const Robot_Command*)item;
+        queue_received_command = true;
+        return pdTRUE;
     }
-    return pdTRUE;
+    return pdFALSE;
 }
 //  ============================================================
 
@@ -132,8 +132,10 @@ BaseType_t custom_xQueueSend(QueueHandle_t queue, const void *item, TickType_t t
 BaseType_t custom_xQueueSendToFront(QueueHandle_t queue, const void *item, TickType_t ticks) {
     if (item != nullptr) {
         sent_emergency_command = *(const Robot_Command*)item;
+        queue_received_command = true;
+        return pdTRUE;
     }
-    return pdTRUE;
+    return pdFALSE;
 }
 //  ============================================================
 
@@ -146,10 +148,185 @@ BaseType_t custom_xQueueSendToFront(QueueHandle_t queue, const void *item, TickT
     ============================================================
 */
 BaseType_t custom_xQueueReceive(QueueHandle_t queue, void *item, TickType_t ticks) {
-    if (item != nullptr) {
-        *(Robot_Command*)item = sent_command;
+    if (queue_received_command == true) {
+        if (item != nullptr) {
+            *(Robot_Command*)item = sent_command;
+        }
+        queue_received_command = false;
+        return pdTRUE;
     }
-    return pdTRUE;
+    return pdFALSE;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Confirm that the robot controller's constructor initializes
+    the object correctly, creates a command queue of size 10,
+    and sets the robot's state to BRAKE. Confirm that
+    start_task() creates a FreeRTOS task.
+    ============================================================
+*/
+void test_robot_controller_initialization(Robot_Controller &r_controller) {
+    // Confirm the constructor initialized.
+    TEST_ASSERT_EQUAL(1, xQueueCreate_fake.call_count);
+    TEST_ASSERT_EQUAL(10, xQueueCreate_fake.arg0_history[0]);
+    TEST_ASSERT_EQUAL(Robot_State::BRAKE, r_controller.get_robot_state());
+
+    // Confirm robot controller task initialized.
+    r_controller.start_task();
+    TEST_ASSERT_EQUAL(1, xTaskCreate_fake.call_count);
+    TEST_ASSERT_EQUAL_STRING("Robot_Controller_Task", xTaskCreate_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(4096, xTaskCreate_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(&r_controller, xTaskCreate_fake.arg3_history[0]);
+    TEST_ASSERT_EQUAL(5, xTaskCreate_fake.arg4_history[0]);
+    TEST_ASSERT_EQUAL(nullptr, xTaskCreate_fake.arg5_history[0]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the monitoring logic inside the
+    monitor_active_command() and process_new_command().
+    ============================================================
+*/
+void test_command_monitoring(
+        Robot_Controller &r_controller, Drive_Train &d_train,
+        Robot_State state, uint32_t speed, uint32_t duration
+    ) {
+        // Set initial time to 0 ticks.
+        xTaskGetTickCount_fake.return_val = 0;
+
+        // Send the command to the queue.
+        r_controller.send_command(state, speed, duration);
+        r_controller.monitor_active_command();
+        r_controller.process_new_command();
+
+        //if (state != Robot_State::BRAKE) {
+        TEST_ASSERT_EQUAL(state, r_controller.get_robot_state());
+
+        // Simulate 500ms passing.
+        xTaskGetTickCount_fake.return_val = 500 / portTICK_PERIOD_MS;
+
+        r_controller.monitor_active_command();
+        r_controller.process_new_command();
+
+        TEST_ASSERT_EQUAL(state, r_controller.get_robot_state());
+
+        // Simulate duration_ms + 500ms passing.
+        xTaskGetTickCount_fake.return_val = (duration + 500) / portTICK_PERIOD_MS;
+
+        int initial_ledc_calls = ledc_set_duty_fake.call_count;
+
+        r_controller.monitor_active_command();
+        r_controller.process_new_command();
+
+        // Confirm the controller switched to the BRAKE state.
+        TEST_ASSERT_EQUAL(Robot_State::BRAKE, r_controller.get_robot_state());
+
+        // If the robot is already braking, then no transition to BRAKE occurs.
+        if (state != Robot_State::BRAKE) {
+            TEST_ASSERT_EQUAL(initial_ledc_calls + 8, ledc_set_duty_fake.call_count);
+        }
+        else {
+            TEST_ASSERT_EQUAL(initial_ledc_calls, ledc_set_duty_fake.call_count);
+        }
+        //}
+
+        return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the routing logic in monitor_active_command() and
+    process_new_command().
+    ============================================================
+*/
+void test_command_routing(
+        Robot_Controller &r_controller, Drive_Train &d_train,
+        Robot_State state, uint32_t speed, uint32_t duration,
+        int send_expected_call_index, int receive_expected_call_index
+    ) {
+        // Send the command to the queue.
+        r_controller.send_command(state, speed, duration);
+
+        TEST_ASSERT_EQUAL(send_expected_call_index, xQueueSend_fake.call_count);
+        TEST_ASSERT_EQUAL(state, sent_command.target_state);
+        TEST_ASSERT_EQUAL(speed, sent_command.speed);
+        TEST_ASSERT_EQUAL(duration, sent_command.duration_ms);
+        TEST_ASSERT_EQUAL(portMAX_DELAY, xQueueSend_fake.arg2_history[send_expected_call_index - 1]);
+
+        // Set random encoder pulses to prove they get reset by the controller.
+        d_train.get_left_encoder().pulse_count = send_expected_call_index * 5;
+        d_train.get_right_encoder().pulse_count = send_expected_call_index * 5;
+
+        // Capture LEDC hardware call count.
+        int initial_ledc_count = ledc_set_duty_fake.call_count;
+
+        xTaskGetTickCount_fake.return_val += 10000 / portTICK_PERIOD_MS;
+
+        // Receive and process the sent command.
+        r_controller.monitor_active_command();
+        r_controller.process_new_command();
+        Robot_Command received_command = r_controller.get_active_command();
+
+        TEST_ASSERT_EQUAL(receive_expected_call_index, xQueueReceive_fake.call_count);
+        TEST_ASSERT_EQUAL(state, received_command.target_state);
+        TEST_ASSERT_EQUAL(speed, received_command.speed);
+        TEST_ASSERT_EQUAL(duration, received_command.duration_ms);
+        TEST_ASSERT_EQUAL(pdMS_TO_TICKS(10), xQueueReceive_fake.arg2_history[receive_expected_call_index - 1]);
+
+        // Confirm the controller updated its internal state, resetted the encoders, and triggered the hardware.
+        TEST_ASSERT_EQUAL(state, r_controller.get_robot_state());
+        TEST_ASSERT_EQUAL(0, d_train.get_left_encoder().pulse_count);
+        TEST_ASSERT_EQUAL(0, d_train.get_right_encoder().pulse_count);
+        TEST_ASSERT_EQUAL(initial_ledc_count + 8, ledc_set_duty_fake.call_count);
+
+        return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Confirm that that emergency_stop() clears the queue, sends a
+    BRAKE command to the front of the queue, and locks out new
+    commands from being sent to the queue.
+
+    NOTE: There is no logic that lifts the lockout, so any
+    commands that are sent after the emergency stop is called
+    will be rejected. We will need to implement a method that
+    lifts the lockout in the future to allow the robot to resume
+    normal operations after an emergency stop.
+    ============================================================
+*/
+void test_emergency_stop(Robot_Controller &r_controller) {
+    r_controller.emergency_stop();
+
+    TEST_ASSERT_EQUAL(1, xQueueReset_fake.call_count);
+    TEST_ASSERT_EQUAL(1, xQueueSendToFront_fake.call_count);
+    TEST_ASSERT_EQUAL(Robot_State::BRAKE, sent_emergency_command.target_state);
+    TEST_ASSERT_EQUAL(0, sent_emergency_command.speed);
+    TEST_ASSERT_EQUAL(pdMS_TO_TICKS(10), xQueueSendToFront_fake.arg2_history[0]);
+
+    // Attempt to send a command after the emergency stop.
+    int initial_queue_sends = xQueueSend_fake.call_count;
+    r_controller.send_command(Robot_State::MOVE_FORWARD, 255, 1000);
+
+    // The call count should remain the same because the emergency lockout rejected the command from being sent to the queue.
+    TEST_ASSERT_EQUAL(initial_queue_sends, xQueueSend_fake.call_count);
+
+    return;
 }
 //  ============================================================
 
@@ -161,226 +338,31 @@ BaseType_t custom_xQueueReceive(QueueHandle_t queue, void *item, TickType_t tick
     ============================================================
 */
 void test_robot_controller_functions(void) {
-    // Create the drive train object.
+    // Create the drive train and robot controller objects.
     Drive_Train d_train = create_drive_train_1();
-    
-
-    /*
-        ============================================================
-        Test 1: Confirm that the robot controller's constructor
-        initializes the object correctly, creates a command queue of
-        size 10, and sets the robot's state to BRAKE.
-        ============================================================
-    */
     Robot_Controller r_controller(d_train);
 
-    TEST_ASSERT_EQUAL(1, xQueueCreate_fake.call_count);
-    TEST_ASSERT_EQUAL(10, xQueueCreate_fake.arg0_history[0]);
+    // Confirm that the robot controller is initialized and its task is created.
+    test_robot_controller_initialization(r_controller);
 
-    TEST_ASSERT_EQUAL(Robot_State::BRAKE, r_controller.get_robot_state());
+    // Confirm the 5 movement commands are monitored.
+    test_command_monitoring(r_controller, d_train, Robot_State::MOVE_FORWARD, 255, 1000);
+    test_command_monitoring(r_controller, d_train, Robot_State::MOVE_BACKWARD, 225, 2500);
+    test_command_monitoring(r_controller, d_train, Robot_State::TURN_LEFT, 210, 1234);
+    test_command_monitoring(r_controller, d_train, Robot_State::TURN_RIGHT, 200, 4321);
+    test_command_monitoring(r_controller, d_train, Robot_State::BRAKE, 0, 1000);
 
-    //  ============================================================
+    // Confirm the 5 movement commands were sent and received.
+    // Ensure the call indexes includes the counts of previous executed commands.
+    test_command_routing(r_controller, d_train, Robot_State::MOVE_FORWARD, 255, 1000, 6, 11);
+    test_command_routing(r_controller, d_train, Robot_State::MOVE_BACKWARD, 225, 2500, 7, 12);
+    test_command_routing(r_controller, d_train, Robot_State::TURN_LEFT, 210, 1234, 8, 13);
+    test_command_routing(r_controller, d_train, Robot_State::TURN_RIGHT, 200, 4321, 9, 14);
+    test_command_routing(r_controller, d_train, Robot_State::BRAKE, 0, 1000, 10, 15);
 
-
-    /*
-        ============================================================
-        Test 2: Confirm that start_task() creates a FreeRTOS task.
-        ============================================================
-    */
-    r_controller.start_task();
-
-    TEST_ASSERT_EQUAL(1, xTaskCreate_fake.call_count);
-    TEST_ASSERT_EQUAL_STRING("Robot_Task", xTaskCreate_fake.arg1_history[0]);
-    TEST_ASSERT_EQUAL(4096, xTaskCreate_fake.arg2_history[0]);
-    TEST_ASSERT_EQUAL(&r_controller, xTaskCreate_fake.arg3_history[0]);
-    TEST_ASSERT_EQUAL(5, xTaskCreate_fake.arg4_history[0]);
-    TEST_ASSERT_EQUAL(nullptr, xTaskCreate_fake.arg5_history[0]);
-
-    //  ============================================================
-
-
-    /*
-        ============================================================
-        Test 3: Verify that send_command() correctly sends commands
-        to the FreeRTOS queue and that the queue receives the
-        correct command data.
-        
-        NOTE: We will use customized fake functions that captures
-        the command sent to the queue before it goes out of scope to
-        verify the data is correct. In hardware, the sent command
-        would not be stored to enforce thread safety.
-        ============================================================
-    */
-
-    /*
-        Test 3.1: Confirm that the forward command is sent to the
-        queue and the queue receives it.
-    */
-    // Send the command to the queue.
-    r_controller.send_command(Robot_State::MOVE_FORWARD, 255, 1000);
-
-    TEST_ASSERT_EQUAL(1, xQueueSend_fake.call_count);
-
-    TEST_ASSERT_EQUAL(Robot_State::MOVE_FORWARD, sent_command.target_state);
-    TEST_ASSERT_EQUAL(255, sent_command.speed);
-    TEST_ASSERT_EQUAL(1000, sent_command.duration_ms);
-
-    TEST_ASSERT_EQUAL(portMAX_DELAY, xQueueSend_fake.arg2_history[0]);
-
-    // Receive the sent command.
-    received_command = r_controller.execute_command(sent_command);
-
-    TEST_ASSERT_EQUAL(1, xQueueReceive_fake.call_count);
-
-    TEST_ASSERT_EQUAL(Robot_State::MOVE_FORWARD, received_command.target_state);
-    TEST_ASSERT_EQUAL(255, received_command.speed);
-    TEST_ASSERT_EQUAL(1000, received_command.duration_ms);
-
-    TEST_ASSERT_EQUAL(portMAX_DELAY, xQueueReceive_fake.arg2_history[0]);
-    //  ============================================================
-
-
-    /*
-        Test 3.2: Confirm that the backward command is sent to the
-        queue and the queue receives it.
-    */
-    // Send the command to the queue.
-    r_controller.send_command(Robot_State::MOVE_BACKWARD, 225, 1500);
-
-    TEST_ASSERT_EQUAL(2, xQueueSend_fake.call_count);
-
-    TEST_ASSERT_EQUAL(Robot_State::MOVE_BACKWARD, sent_command.target_state);
-    TEST_ASSERT_EQUAL(225, sent_command.speed);
-    TEST_ASSERT_EQUAL(1500, sent_command.duration_ms);
-
-    TEST_ASSERT_EQUAL(portMAX_DELAY, xQueueSend_fake.arg2_history[1]);
-
-    // Receive the sent command.
-    received_command = r_controller.execute_command(sent_command);
-
-    TEST_ASSERT_EQUAL(2, xQueueReceive_fake.call_count);
-
-    TEST_ASSERT_EQUAL(Robot_State::MOVE_BACKWARD, received_command.target_state);
-    TEST_ASSERT_EQUAL(225, received_command.speed);
-    TEST_ASSERT_EQUAL(1500, received_command.duration_ms);
-
-    TEST_ASSERT_EQUAL(portMAX_DELAY, xQueueReceive_fake.arg2_history[1]);
-    //  ============================================================
-
-
-    /*
-        Test 3.3: Confirm that the left command is sent to the
-        queue and the queue receives it.
-    */
-    // Send the command to the queue.
-    r_controller.send_command(Robot_State::TURN_LEFT, 210, 3000);
-
-    TEST_ASSERT_EQUAL(3, xQueueSend_fake.call_count);
-
-    TEST_ASSERT_EQUAL(Robot_State::TURN_LEFT, sent_command.target_state);
-    TEST_ASSERT_EQUAL(210, sent_command.speed);
-    TEST_ASSERT_EQUAL(3000, sent_command.duration_ms);
-
-    TEST_ASSERT_EQUAL(portMAX_DELAY, xQueueSend_fake.arg2_history[2]);
-
-    // Receive the sent command.
-    received_command = r_controller.execute_command(sent_command);
-
-    TEST_ASSERT_EQUAL(3, xQueueReceive_fake.call_count);
-
-    TEST_ASSERT_EQUAL(Robot_State::TURN_LEFT, received_command.target_state);
-    TEST_ASSERT_EQUAL(210, received_command.speed);
-    TEST_ASSERT_EQUAL(3000, received_command.duration_ms);
-
-    TEST_ASSERT_EQUAL(portMAX_DELAY, xQueueReceive_fake.arg2_history[2]);
-    //  ============================================================
-
-
-    /*
-        Test 3.4: Confirm that the right command is sent to the
-        queue and the queue receives it.
-    */
-    // Send the command to the queue.
-    r_controller.send_command(Robot_State::TURN_RIGHT, 200, 2200);
-
-    TEST_ASSERT_EQUAL(4, xQueueSend_fake.call_count);
-
-    TEST_ASSERT_EQUAL(Robot_State::TURN_RIGHT, sent_command.target_state);
-    TEST_ASSERT_EQUAL(200, sent_command.speed);
-    TEST_ASSERT_EQUAL(2200, sent_command.duration_ms);
-
-    TEST_ASSERT_EQUAL(portMAX_DELAY, xQueueSend_fake.arg2_history[3]);
-
-    // Receive the sent command.
-    received_command = r_controller.execute_command(sent_command);
-
-    TEST_ASSERT_EQUAL(4, xQueueReceive_fake.call_count);
-
-    TEST_ASSERT_EQUAL(Robot_State::TURN_RIGHT, received_command.target_state);
-    TEST_ASSERT_EQUAL(200, received_command.speed);
-    TEST_ASSERT_EQUAL(2200, received_command.duration_ms);
-
-    TEST_ASSERT_EQUAL(portMAX_DELAY, xQueueReceive_fake.arg2_history[3]);
-    //  ============================================================
-
-
-    /*
-        Test 3.5: Confirm that the brake command is sent to the
-        queue and the queue receives it.
-    */
-    // Send the command to the queue.
-    r_controller.send_command(Robot_State::BRAKE, 0, 4444);
-
-    TEST_ASSERT_EQUAL(5, xQueueSend_fake.call_count);
-
-    TEST_ASSERT_EQUAL(Robot_State::BRAKE, sent_command.target_state);
-    TEST_ASSERT_EQUAL(0, sent_command.speed);
-    TEST_ASSERT_EQUAL(4444, sent_command.duration_ms);
-
-    TEST_ASSERT_EQUAL(portMAX_DELAY, xQueueSend_fake.arg2_history[4]);
-
-    // Receive the sent command.
-    received_command = r_controller.execute_command(sent_command);
-
-    TEST_ASSERT_EQUAL(5, xQueueReceive_fake.call_count);
-
-    TEST_ASSERT_EQUAL(Robot_State::BRAKE, received_command.target_state);
-    TEST_ASSERT_EQUAL(0, received_command.speed);
-    TEST_ASSERT_EQUAL(4444, received_command.duration_ms);
-
-    TEST_ASSERT_EQUAL(portMAX_DELAY, xQueueReceive_fake.arg2_history[4]);
-    //  ============================================================
-
-
-    /*
-        ============================================================
-        Test 4: Confirm that that emergency_stop() clears the queue,
-        sends a BRAKE command to the front of the queue, and locks
-        out new commands from being sent to the queue.
-
-        NOTE: There is no logic that lifts the lockout, so any
-        commands that are sent after the emergency stop is called
-        will be rejected. We will need to implement a method that
-        lifts the lockout in the future to allow the robot to resume
-        normal operations after an emergency stop.
-        ============================================================
-    */
-    r_controller.emergency_stop();
-
-    TEST_ASSERT_EQUAL(1, xQueueReset_fake.call_count);
-    TEST_ASSERT_EQUAL(1, xQueueSendToFront_fake.call_count);
-
-    TEST_ASSERT_EQUAL(Robot_State::BRAKE, sent_emergency_command.target_state);
-    TEST_ASSERT_EQUAL(0, sent_emergency_command.speed);
-
-    TEST_ASSERT_EQUAL(pdMS_TO_TICKS(10), xQueueSendToFront_fake.arg2_history[0]);
-
-    // Attempt to send a command after the emergency stop.
-    r_controller.send_command(Robot_State::MOVE_FORWARD, 255, 1000);
-
-    // The call count should remain the same because the emergency lockout rejected the command from being sent to the queue.
-    TEST_ASSERT_EQUAL(5, xQueueSend_fake.call_count);
-    //  ============================================================
+    // Corfirm the emergency stop works and locks out new commands from being sent to the queue.
+    test_emergency_stop(r_controller);
 
     return;
 }
+//  ============================================================

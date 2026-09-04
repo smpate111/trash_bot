@@ -26,11 +26,11 @@
     ============================================================
 */
 enum Robot_State {
-    BRAKE,
     MOVE_FORWARD,
     MOVE_BACKWARD,
     TURN_LEFT,
-    TURN_RIGHT
+    TURN_RIGHT,
+    BRAKE
 };
 //  ============================================================
 
@@ -60,22 +60,44 @@ class Robot_Controller {
     // Set these methods to public to allow access and control from outside the class.
     public:
         explicit Robot_Controller(Drive_Train &train);
-
-        ~Robot_Controller() = default;
+        virtual ~Robot_Controller() = default;
 
         void start_task();
+
+        void loop_tick();
+        void process_new_command();
+        void monitor_active_command();
+
+        BaseType_t received_new_command(Robot_Command &command);
+        void set_active_command(const Robot_Command &command);
+        Robot_Command get_active_command();
+        void execute_active_command();
+
+        Robot_State get_robot_state();
+        void set_robot_state(const Robot_State &new_state);
+        
+        TickType_t get_current_time();
+        void start_timer();
+        TickType_t get_start_time();
         
         void send_command(Robot_State state, uint32_t speed, uint32_t duration_ms);
-        Robot_Command execute_command(Robot_Command command);
-        Robot_Command process_command(Robot_Command current_command);
-        
         void emergency_stop();
         
-        Robot_State get_robot_state();
+        const char* state_strings[5] = {
+            "MOVE_FORWARD",
+            "MOVE_BACKWARD",
+            "TURN_LEFT",
+            "TURN_RIGHT",
+            "BRAKE"
+        };
 
     // Set these variables to private to prevent access and modifications from outside the class.
     private:
-        static constexpr const char* const CONTROLLER_NAME = "Robot Controller";
+        static void task_queue(void *arg);
+        void control_loop();
+
+        const char* TAG = "Robot_Controller_Task";
+        const char* TAG_1 = "Emergency_Stop";
 
         Drive_Train &drive_train;
         Robot_State current_state;
@@ -83,19 +105,15 @@ class Robot_Controller {
 
         TickType_t state_start_time = 0;
 
-        bool emergency_lockout = false;
-
-        const char* state_strings[6] = {
-            "BRAKE",
-            "MOVE_FORWARD",
-            "MOVE_BACKWARD",
-            "TURN_LEFT",
-            "TURN_RIGHT"
+        Robot_Command active_command = {
+            Robot_State::BRAKE,
+            0,
+            0
         };
 
-        static void task_queue(void *arg);
+        bool emergency_lockout = false;
 
-        void control_loop();
+        bool new_command = true;
 };
 //  ============================================================
 
