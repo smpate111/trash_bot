@@ -75,6 +75,8 @@ class Robot_Controller {
 
         Robot_State get_robot_state();
         void set_robot_state(const Robot_State &new_state);
+
+        void set_robot_speed(const uint32_t &speed);
         
         TickType_t get_current_time();
         void start_timer();

@@ -56,10 +56,35 @@ class Drive_Train {
 
         Wheel_Encoder& get_left_encoder();
         Wheel_Encoder& get_right_encoder();
+        uint32_t get_pulse_count(const Wheel_Encoder &encoder);
+
+        void start_task();
+        void loop_tick();
+
+        void set_l_distance(double distance);
+        double get_l_distance();
+        void set_r_distance(double distance);
+        double get_r_distance();
+
+        void set_last_l_pulses(uint32_t pulses);
+        uint32_t get_last_l_pulses();
+        void set_last_r_pulses(uint32_t pulses);
+        uint32_t get_last_r_pulses();
+
+        bool stopped_recently = true;
 
     // Set these variables to private to prevent access and modifications from outside the class.
     private:
+        static void task_queue(void *arg);
+        void odometry_loop();
+
         Train_Config config;
+
+        double l_distance{};
+        double r_distance{};
+
+        uint32_t last_l_pulses = 0;
+        uint32_t last_r_pulses = 0;
 };
 //  ============================================================
 

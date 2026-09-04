@@ -34,29 +34,10 @@ bool queue_received_command = false;
 */
 Drive_Train create_drive_train_1() {
     // Create the motor objects.
-    static Motor_Config fl_config = {
-        "Front Left Motor",
-        GPIO_NUM_11, GPIO_NUM_12,
-        LEDC_CHANNEL_0, LEDC_CHANNEL_1
-    };
-
-    static Motor_Config fr_config = {
-        "Front Right Motor",
-        GPIO_NUM_13, GPIO_NUM_14,
-        LEDC_CHANNEL_2, LEDC_CHANNEL_3
-    };
-
-    static Motor_Config bl_config = {
-        "Back Left Motor",
-        GPIO_NUM_6, GPIO_NUM_7,
-        LEDC_CHANNEL_5, LEDC_CHANNEL_4
-    };
-
-    static Motor_Config br_config = {
-        "Back Right Motor",
-        GPIO_NUM_15, GPIO_NUM_16,
-        LEDC_CHANNEL_7, LEDC_CHANNEL_6
-    };
+    static Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    static Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    static Motor_Config bl_config = {"Back Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    static Motor_Config br_config = {"Back Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
 
     static Motor fl_motor(fl_config);
     static Motor fr_motor(fr_config);
@@ -64,39 +45,21 @@ Drive_Train create_drive_train_1() {
     static Motor br_motor(br_config);
 
     // Create the motor driver objects.
-    static Driver_Config fd_config = {
-        "Front Driver",
-        fl_motor, fr_motor
-    };
-
-    static Driver_Config bd_config = {
-        "Back Driver",
-        bl_motor, br_motor
-    };
+    static Driver_Config fd_config = {"Front Driver", fl_motor, fr_motor};
+    static Driver_Config bd_config = {"Back Driver", bl_motor, br_motor};
 
     static Motor_Driver f_driver(fd_config);
     static Motor_Driver b_driver(bd_config);
 
     // Create the wheel encoder objects.
-    static Encoder_Config le_config = {
-        "Left Encoder", GPIO_NUM_1,
-        80.0, 20
-    };
-
-    static Encoder_Config re_config = {
-        "Right Encoder", GPIO_NUM_2,
-        80.0, 20
-    };
+    static Encoder_Config le_config = {"Left Encoder", GPIO_NUM_1, 80.0, 20};
+    static Encoder_Config re_config = {"Right Encoder", GPIO_NUM_2, 80.0, 20};
 
     static Wheel_Encoder l_encoder(le_config);
     static Wheel_Encoder r_encoder(re_config);
 
     // Configure the drive train object.
-    static Train_Config t_config = {
-        "Drive Train",
-        f_driver, b_driver,
-        &l_encoder, &r_encoder
-    };
+    static Train_Config t_config = {"Drive Train", f_driver, b_driver, &l_encoder, &r_encoder};
 
     return Drive_Train(t_config);
 }
@@ -207,27 +170,19 @@ void test_command_monitoring(
         r_controller.send_command(state, speed, duration);
         r_controller.monitor_active_command();
         r_controller.process_new_command();
-
-        //if (state != Robot_State::BRAKE) {
         TEST_ASSERT_EQUAL(state, r_controller.get_robot_state());
 
         // Simulate 500ms passing.
         xTaskGetTickCount_fake.return_val = 500 / portTICK_PERIOD_MS;
-
         r_controller.monitor_active_command();
         r_controller.process_new_command();
-
         TEST_ASSERT_EQUAL(state, r_controller.get_robot_state());
 
         // Simulate duration_ms + 500ms passing.
         xTaskGetTickCount_fake.return_val = (duration + 500) / portTICK_PERIOD_MS;
-
         int initial_ledc_calls = ledc_set_duty_fake.call_count;
-
         r_controller.monitor_active_command();
         r_controller.process_new_command();
-
-        // Confirm the controller switched to the BRAKE state.
         TEST_ASSERT_EQUAL(Robot_State::BRAKE, r_controller.get_robot_state());
 
         // If the robot is already braking, then no transition to BRAKE occurs.
@@ -237,7 +192,6 @@ void test_command_monitoring(
         else {
             TEST_ASSERT_EQUAL(initial_ledc_calls, ledc_set_duty_fake.call_count);
         }
-        //}
 
         return;
 }
@@ -285,10 +239,8 @@ void test_command_routing(
         TEST_ASSERT_EQUAL(duration, received_command.duration_ms);
         TEST_ASSERT_EQUAL(pdMS_TO_TICKS(10), xQueueReceive_fake.arg2_history[receive_expected_call_index - 1]);
 
-        // Confirm the controller updated its internal state, resetted the encoders, and triggered the hardware.
+        // Confirm the controller updated its internal state and triggered the hardware.
         TEST_ASSERT_EQUAL(state, r_controller.get_robot_state());
-        TEST_ASSERT_EQUAL(0, d_train.get_left_encoder().pulse_count);
-        TEST_ASSERT_EQUAL(0, d_train.get_right_encoder().pulse_count);
         TEST_ASSERT_EQUAL(initial_ledc_count + 8, ledc_set_duty_fake.call_count);
 
         return;

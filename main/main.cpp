@@ -67,71 +67,6 @@ void Navigation_Task(void *arg) {
 
 /*
     ============================================================
-    This task handles the robot's odometry by using the wheel
-    encoder sensors to calculate how far the robot traveled
-    based on a given movement.
-    ============================================================
-*/
-void Odometry_Task(void *arg) {
-    Drive_Train *train = static_cast<Drive_Train*>(arg);
-
-    // These are to help us determine if the robot is moving or not.
-    uint32_t last_l_pulses = 0;
-    uint32_t last_r_pulses = 0;
-
-    // These are to record the distances traveled by the front left and the front right motors.
-    double l_distance{};
-    double r_distance{};
-
-    // A flag to print the last log.
-    bool stopped_recently = false;
-
-    // Use an infinite loop to keep this task alive so that any movement can have its distance recorded.
-    while (true) {
-        // Retrieve the pulse counts.
-        uint32_t l_pulses = train->get_left_encoder().pulse_count;
-        uint32_t r_pulses = train->get_right_encoder().pulse_count;
-        
-        // Calculate the distance if the current pulse count is not the same as the previous pulse count
-        // so that we know the robot is moving.
-        if ((last_l_pulses != l_pulses) || (last_r_pulses != r_pulses)) {
-            l_distance = train->get_left_encoder().calculate_distance();
-            r_distance = train->get_right_encoder().calculate_distance();
-
-            ESP_LOGI("Odometry_Task", "Distance: %0.4fmm.", (l_distance + r_distance) / 2);
-
-            last_l_pulses = l_pulses;
-            last_r_pulses = r_pulses;
-
-            // Set the flag to true so that we can be ready to calculate the total traveled distance of
-            // the current movement.
-            stopped_recently = true;
-        }
-
-        // Record the total traveled distance once the movement is complete.
-        else if (stopped_recently == true) {
-            l_distance = train->get_left_encoder().calculate_distance();
-            r_distance = train->get_right_encoder().calculate_distance();
-            
-            ESP_LOGI("Odometry_Task", "Robot idle. Final Distance: %0.4fmm.", (l_distance + r_distance) / 2);
-
-            // Set the flag back to false to prevent the last log from being printed.
-            stopped_recently = false;
-        }
-        
-        // Execute the loop every 500 ms.
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
-
-    vTaskDelete(NULL);
-    return;
-}
-//  ============================================================
-
-
-
-/*
-    ============================================================
     This task handles obstacle avoidance where it controls the
     4 ultrasonic sensors via the robot controller's state and
     forces the robot to stop moving when an object is too
@@ -384,6 +319,9 @@ void app_main(void) {
 
 
 
+    // Start the odometry task.
+    d_train.start_task();
+    
     // Start the robot controller task.
     controller.start_task();
 
@@ -391,7 +329,7 @@ void app_main(void) {
     xTaskCreate(Navigation_Task, "Naviation_Task", 4096, &controller, 5, nullptr);
 
     // Configure the odometry task by passing the drive train.
-    xTaskCreate(Odometry_Task, "Odometry_Task", 4096, &d_train, 4, nullptr);
+    //xTaskCreate(Odometry_Task, "Odometry_Task", 4096, &d_train, 4, nullptr);
 
     // Configure the obstacle avoidance task by passing the obstacle avoidance config.
     //xTaskCreate(Obstacle_Avoidance_Task, "Obstacle_Avoidance_Task", 4096, &o_avoid, 5, nullptr);

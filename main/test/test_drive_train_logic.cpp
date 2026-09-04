@@ -21,6 +21,26 @@
 
 
 
+// Global variables that tracks hardware configurations.
+constexpr int number_of_pins = 10;
+constexpr int number_of_ledc_channels = 8;
+constexpr int number_of_gpio_configs = 2;
+constexpr int number_of_interrupts = 2;
+static int pins[number_of_pins];
+static int ledc_channels[number_of_ledc_channels];
+static double expected_duties[number_of_ledc_channels];
+static int interrupts[number_of_interrupts];
+
+enum movement {
+    FORWARD,
+    BACKWARD,
+    LEFT,
+    RIGHT,
+    STOP
+};
+
+
+
 /*
     ============================================================
     Helper function that creates the drive train object.
@@ -28,29 +48,10 @@
 */
 Drive_Train create_drive_train() {
     // Create the motor objects.
-    static Motor_Config fl_config = {
-        "Front Left Motor",
-        GPIO_NUM_11, GPIO_NUM_12,
-        LEDC_CHANNEL_0, LEDC_CHANNEL_1
-    };
-
-    static Motor_Config fr_config = {
-        "Front Right Motor",
-        GPIO_NUM_13, GPIO_NUM_14,
-        LEDC_CHANNEL_2, LEDC_CHANNEL_3
-    };
-
-    static Motor_Config bl_config = {
-        "Back Left Motor",
-        GPIO_NUM_6, GPIO_NUM_7,
-        LEDC_CHANNEL_5, LEDC_CHANNEL_4
-    };
-
-    static Motor_Config br_config = {
-        "Back Right Motor",
-        GPIO_NUM_15, GPIO_NUM_16,
-        LEDC_CHANNEL_7, LEDC_CHANNEL_6
-    };
+    static Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    static Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    static Motor_Config bl_config = {"Back Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    static Motor_Config br_config = {"Back Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
 
     static Motor fl_motor(fl_config);
     static Motor fr_motor(fr_config);
@@ -58,41 +59,209 @@ Drive_Train create_drive_train() {
     static Motor br_motor(br_config);
 
     // Create the motor driver objects.
-    static Driver_Config fd_config = {
-        "Front Driver",
-        fl_motor, fr_motor
-    };
-
-    static Driver_Config bd_config = {
-        "Back Driver",
-        bl_motor, br_motor
-    };
+    static Driver_Config fd_config = {"Front Driver", fl_motor, fr_motor};
+    static Driver_Config bd_config = {"Back Driver", bl_motor, br_motor};
 
     static Motor_Driver f_driver(fd_config);
     static Motor_Driver b_driver(bd_config);
 
     // Create the wheel encoder objects.
-    static Encoder_Config le_config = {
-        "Left Encoder", GPIO_NUM_1,
-        80.0, 20
-    };
-
-    static Encoder_Config re_config = {
-        "Right Encoder", GPIO_NUM_2,
-        80.0, 20
-    };
+    static Encoder_Config le_config = {"Left Encoder", GPIO_NUM_1, 80.0, 20};
+    static Encoder_Config re_config = {"Right Encoder", GPIO_NUM_2, 80.0, 20};
 
     static Wheel_Encoder l_encoder(le_config);
     static Wheel_Encoder r_encoder(re_config);
 
     // Configure the drive train object.
-    static Train_Config t_config = {
-        "Drive Train",
-        f_driver, b_driver,
-        &l_encoder, &r_encoder
-    };
+    static Train_Config t_config = {"Drive Train", f_driver, b_driver, &l_encoder, &r_encoder};
+
+    pins[0] = GPIO_NUM_11;
+    pins[1] = GPIO_NUM_12;
+    pins[2] = GPIO_NUM_13;
+    pins[3] = GPIO_NUM_14;
+    pins[4] = GPIO_NUM_6;
+    pins[5] = GPIO_NUM_7;
+    pins[6] = GPIO_NUM_15;
+    pins[7] = GPIO_NUM_16;
+    pins[8] = GPIO_NUM_1;
+    pins[9] = GPIO_NUM_2;
+
+    ledc_channels[0] = LEDC_CHANNEL_0;
+    ledc_channels[1] = LEDC_CHANNEL_1;
+    ledc_channels[2] = LEDC_CHANNEL_2;
+    ledc_channels[3] = LEDC_CHANNEL_3;
+    ledc_channels[4] = LEDC_CHANNEL_5;
+    ledc_channels[5] = LEDC_CHANNEL_4;
+    ledc_channels[6] = LEDC_CHANNEL_7;
+    ledc_channels[7] = LEDC_CHANNEL_6;
+
+    interrupts[0] = GPIO_NUM_1;
+    interrupts[1] = GPIO_NUM_2;
 
     return Drive_Train(t_config);
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Confirm that the drive train's constructor initializes
+    the object correctly. Confirm that start_task() creates a
+    FreeRTOS task.
+    ============================================================
+*/
+void test_drive_train_initialization(Drive_Train &d_train) {
+    // Verify the drive train hardware is initialized.
+    for (int i = 0; i < number_of_pins; i++) {
+        TEST_ASSERT_EQUAL(pins[i], gpio_reset_pin_fake.arg0_history[i]);
+        TEST_ASSERT_EQUAL(pins[i], gpio_set_direction_fake.arg0_history[i]);
+
+        if (i < 8) {
+            TEST_ASSERT_EQUAL(GPIO_MODE_OUTPUT, gpio_set_direction_fake.arg1_history[i]);
+        }
+        else if ((i >= 8) && (i < 10)) {
+            TEST_ASSERT_EQUAL(GPIO_MODE_INPUT, gpio_set_direction_fake.arg1_history[i]);
+        }
+    }
+
+    for (int i = 0; i < number_of_interrupts; i++) {
+        TEST_ASSERT_EQUAL(interrupts[i], gpio_isr_handler_add_fake.arg0_history[i]);
+    }
+
+    TEST_ASSERT_EQUAL(number_of_pins, gpio_reset_pin_fake.call_count);
+    TEST_ASSERT_EQUAL(number_of_pins, gpio_set_direction_fake.call_count);
+    TEST_ASSERT_EQUAL(number_of_ledc_channels, ledc_channel_config_fake.call_count);
+    TEST_ASSERT_EQUAL(number_of_interrupts, gpio_isr_handler_add_fake.call_count);
+    TEST_ASSERT_EQUAL(number_of_gpio_configs, gpio_config_fake.call_count);
+
+    // Verify the Odometry Task is created.
+    d_train.start_task();
+    TEST_ASSERT_EQUAL(1, xTaskCreate_fake.call_count);
+    TEST_ASSERT_EQUAL_STRING("Odometry_Task", xTaskCreate_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(4096, xTaskCreate_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(&d_train, xTaskCreate_fake.arg3_history[0]);
+    TEST_ASSERT_EQUAL(4, xTaskCreate_fake.arg4_history[0]);
+    TEST_ASSERT_EQUAL(nullptr, xTaskCreate_fake.arg5_history[0]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Confirm that the drive train performs the correct movements.
+    ============================================================
+*/
+void test_drive_train_movement(
+        Drive_Train &d_train, movement command, int speed, uint32_t duration,
+        uint32_t pulses_per_second, int ledc_calls
+    ) {
+        // Verify the pulse count is 0 before performing the count.
+        Wheel_Encoder l_encoder = d_train.get_left_encoder();
+        Wheel_Encoder r_encoder = d_train.get_right_encoder();
+
+        l_encoder.reset_count();
+        r_encoder.reset_count();
+        
+        TEST_ASSERT_EQUAL(0, d_train.get_pulse_count(l_encoder));
+        TEST_ASSERT_EQUAL(0, d_train.get_pulse_count(r_encoder));
+
+        // Verify the movement.
+        d_train.change_speed(speed, speed);
+
+        switch(command) {
+            case movement::FORWARD:
+                d_train.move_forward();
+                break;
+
+            case movement::BACKWARD:
+                d_train.move_backward();
+                break;
+
+            case movement::LEFT:
+                d_train.turn_left();
+                break;
+
+            case movement::RIGHT:
+                d_train.turn_right();
+                break;
+
+            case movement::STOP:
+                d_train.brake_all();
+                break;
+        }
+
+        TEST_ASSERT_EQUAL(ledc_calls, ledc_set_duty_fake.call_count);
+
+        for (int i = 0; i < number_of_ledc_channels; i++) {
+            int history_i = i;
+            
+            if (ledc_calls > 9) {
+                history_i = history_i + (ledc_calls - 8);
+            }
+            
+            TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[history_i]);
+            TEST_ASSERT_EQUAL(ledc_channels[i], ledc_set_duty_fake.arg1_history[history_i]);
+            TEST_ASSERT_EQUAL(expected_duties[i], ledc_set_duty_fake.arg2_history[history_i]);
+        }
+
+        // Simulate the ISR when the robot is moving.
+        if (command != movement::STOP) {
+            // Multiply the duration by the number of pulses per second to estimate the ISR was called that many times.
+            for (uint32_t i = 0; i < (duration * pulses_per_second); i++) {
+                Wheel_Encoder::isr_handler(&l_encoder);
+                Wheel_Encoder::isr_handler(&r_encoder);
+            }
+
+            // Confirm the pulse count after moving for the specified duration.
+            TEST_ASSERT_EQUAL(duration * pulses_per_second, d_train.get_pulse_count(l_encoder));
+            TEST_ASSERT_EQUAL(duration * pulses_per_second, d_train.get_pulse_count(r_encoder));
+        }
+        return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Confirm that the drive train performs the loop_tick().
+    ============================================================
+*/
+void test_drive_train_task(Drive_Train &d_train) {
+    Wheel_Encoder &l_encoder = d_train.get_left_encoder();
+    Wheel_Encoder &r_encoder = d_train.get_right_encoder();
+    
+    // Reset the pulse counts.
+    l_encoder.reset_count();
+    r_encoder.reset_count();
+    TEST_ASSERT_EQUAL(0, d_train.get_pulse_count(l_encoder));
+    TEST_ASSERT_EQUAL(0, d_train.get_pulse_count(r_encoder));
+
+    // Simulate the wheel encoders pulsed 20 times.
+    l_encoder.pulse_count = 20;
+    r_encoder.pulse_count = 20;
+    
+    // Confirm the robot is moving.
+    d_train.loop_tick();
+    TEST_ASSERT_EQUAL(d_train.get_last_l_pulses(), d_train.get_pulse_count(l_encoder));
+    TEST_ASSERT_EQUAL(d_train.get_last_r_pulses(), d_train.get_pulse_count(r_encoder));
+    TEST_ASSERT_EQUAL(false, d_train.stopped_recently);
+
+    // Confirm the robot stopped moving.
+    d_train.loop_tick();
+    TEST_ASSERT_EQUAL(0, d_train.get_pulse_count(l_encoder));
+    TEST_ASSERT_EQUAL(0, d_train.get_pulse_count(r_encoder));
+    TEST_ASSERT_EQUAL(0, d_train.get_last_l_pulses());
+    TEST_ASSERT_EQUAL(0, d_train.get_last_r_pulses());
+    TEST_ASSERT_EQUAL(0.0, d_train.get_l_distance());
+    TEST_ASSERT_EQUAL(0.0, d_train.get_r_distance());
+    TEST_ASSERT_EQUAL(true, d_train.stopped_recently);
+
+    return;
 }
 //  ============================================================
 
@@ -107,450 +276,71 @@ void test_drive_train_functions(void) {
     // Create the drive train object.
     Drive_Train d_train = create_drive_train();
 
-
-    /*
-        ============================================================
-        Test 1: Verify the hardware initialization of the drive
-        train.
-        ============================================================
-    */
-
-    // Confirm the GPIO pins were reset.
-    TEST_ASSERT_EQUAL(10, gpio_reset_pin_fake.call_count);
-    TEST_ASSERT_EQUAL(GPIO_NUM_11, gpio_reset_pin_fake.arg0_history[0]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_12, gpio_reset_pin_fake.arg0_history[1]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_13, gpio_reset_pin_fake.arg0_history[2]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_14, gpio_reset_pin_fake.arg0_history[3]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_6, gpio_reset_pin_fake.arg0_history[4]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_7, gpio_reset_pin_fake.arg0_history[5]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_15, gpio_reset_pin_fake.arg0_history[6]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_16, gpio_reset_pin_fake.arg0_history[7]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_1, gpio_reset_pin_fake.arg0_history[8]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_2, gpio_reset_pin_fake.arg0_history[9]);
-
-    // Confirm the GPIO pins' directions.
-    TEST_ASSERT_EQUAL(10, gpio_set_direction_fake.call_count);
-    TEST_ASSERT_EQUAL(GPIO_NUM_11, gpio_set_direction_fake.arg0_history[0]);
-    TEST_ASSERT_EQUAL(GPIO_MODE_OUTPUT, gpio_set_direction_fake.arg1_history[0]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_12, gpio_set_direction_fake.arg0_history[1]);
-    TEST_ASSERT_EQUAL(GPIO_MODE_OUTPUT, gpio_set_direction_fake.arg1_history[1]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_13, gpio_set_direction_fake.arg0_history[2]);
-    TEST_ASSERT_EQUAL(GPIO_MODE_OUTPUT, gpio_set_direction_fake.arg1_history[2]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_14, gpio_set_direction_fake.arg0_history[3]);
-    TEST_ASSERT_EQUAL(GPIO_MODE_OUTPUT, gpio_set_direction_fake.arg1_history[3]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_6, gpio_set_direction_fake.arg0_history[4]);
-    TEST_ASSERT_EQUAL(GPIO_MODE_OUTPUT, gpio_set_direction_fake.arg1_history[4]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_7, gpio_set_direction_fake.arg0_history[5]);
-    TEST_ASSERT_EQUAL(GPIO_MODE_OUTPUT, gpio_set_direction_fake.arg1_history[5]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_15, gpio_set_direction_fake.arg0_history[6]);
-    TEST_ASSERT_EQUAL(GPIO_MODE_OUTPUT, gpio_set_direction_fake.arg1_history[6]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_16, gpio_set_direction_fake.arg0_history[7]);
-    TEST_ASSERT_EQUAL(GPIO_MODE_OUTPUT, gpio_set_direction_fake.arg1_history[7]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_1, gpio_set_direction_fake.arg0_history[8]);
-    TEST_ASSERT_EQUAL(GPIO_MODE_INPUT, gpio_set_direction_fake.arg1_history[8]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_2, gpio_set_direction_fake.arg0_history[9]);
-    TEST_ASSERT_EQUAL(GPIO_MODE_INPUT, gpio_set_direction_fake.arg1_history[9]);
-
-    // Confirm the number of calls for the LEDC config.
-    TEST_ASSERT_EQUAL(8, ledc_channel_config_fake.call_count);
-
-    // Confirm the number of calls for the GPIO config.
-    TEST_ASSERT_EQUAL(2, gpio_config_fake.call_count);
-
-    // Confirm the number of calls for the ISR handler and which GPIO pin called it.
-    TEST_ASSERT_EQUAL(2, gpio_isr_handler_add_fake.call_count);
-    TEST_ASSERT_EQUAL(GPIO_NUM_1, gpio_isr_handler_add_fake.arg0_history[0]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_2, gpio_isr_handler_add_fake.arg0_history[1]);
-    //  ============================================================
-
-
-    /*
-        ============================================================
-        Test 2: Check if the fake LEDC hardware is correctly called
-        in move_forward(). Also verify the Interrupt Service Routine
-        gets triggered and performs pulse counting.
-        ============================================================
-    */
-
-    d_train.change_speed(255, 255);
-    d_train.move_forward();
-
-    // Assume that we are moving forward for 3 seconds.
-    uint32_t duration = 3;
-
-    // The number of pulses counted per second based on the speed of the motors.
-    // This number is based on the actual hardware and will need to be adjusted if the
-    // speed or hardware changes.
-    uint32_t pulses_per_second = 30;
-
-    // Verify the pulse count is 0 before performing the count.
-    Wheel_Encoder l_encoder = d_train.get_left_encoder();
-    Wheel_Encoder r_encoder = d_train.get_right_encoder();
-
-    l_encoder.reset_count();
-    r_encoder.reset_count();
-    
-    TEST_ASSERT_EQUAL(0, l_encoder.pulse_count);
-    TEST_ASSERT_EQUAL(0, r_encoder.pulse_count);
-
-    // Confirm the number of calls for the LEDC duty.
-    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
-
-    // Confirm the LEDC duty for the front left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[0]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg1_history[0]);       // config.Front_Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[0]);     // Current_Speed
-
-    // Confirm the LEDC duty for the front left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[1]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(1, ledc_set_duty_fake.arg1_history[1]);       // config.Front_Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[1]);     // 0.0
-
-    // Confirm the LEDC duty for the front right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[2]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(2, ledc_set_duty_fake.arg1_history[2]);       // config.Front_Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[2]);     // Current_Speed
-
-    // Confirm the LEDC duty for the front right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[3]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(3, ledc_set_duty_fake.arg1_history[3]);       // config.Front_Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[3]);     // 0.0
-
-    // Confirm the LEDC duty for the back left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[4]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(5, ledc_set_duty_fake.arg1_history[4]);       // config.Back_Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[4]);     // Current_Speed
-
-    // Confirm the LEDC duty for the back left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[5]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.arg1_history[5]);       // config.Back_Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[5]);     // 0.0
-
-    // Confirm the LEDC duty for the back right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[6]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(7, ledc_set_duty_fake.arg1_history[6]);       // config.Back_Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[6]);     // Current_Speed
-
-    // Confirm the LEDC duty for the back right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[7]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(6, ledc_set_duty_fake.arg1_history[7]);       // config.Back_Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[7]);     // 0.0
-
-    // Multiply the duration by the number of pulses per second to simulate the ISR handler being called
-    // that many times per second.
-    for (uint32_t i = 0; i < (duration * pulses_per_second); i++) {
-        Wheel_Encoder::isr_handler(&l_encoder);
-        Wheel_Encoder::isr_handler(&r_encoder);
-    }
-
-    // Confirm the pulse count after moving forward for the specified duration.
-    TEST_ASSERT_EQUAL(90, l_encoder.pulse_count);
-    TEST_ASSERT_EQUAL(90, r_encoder.pulse_count);
-    //  ============================================================
-
-
-    /*
-        ============================================================
-        Test 3: Check if the fake LEDC hardware is correctly called
-        in move_backward(). Also verify the Interrupt Service Routine
-        gets triggered and performs pulse counting.
-        ============================================================
-    */
-
-    d_train.change_speed(200, 200);
-    d_train.move_backward();
-
-    // Assume that we are moving backward for 3 seconds.
-    duration = 3;
-
-    // The number of pulses counted per second based on the speed of the motors.
-    // This number is based on the actual hardware and will need to be adjusted if the
-    // speed or hardware changes.
-    pulses_per_second = 25;
-
-    // Verify the pulse count is 0 before performing the count.
-    l_encoder.reset_count();
-    r_encoder.reset_count();
-    TEST_ASSERT_EQUAL(0, l_encoder.pulse_count);
-    TEST_ASSERT_EQUAL(0, r_encoder.pulse_count);
-
-    // Confirm the number of calls for the LEDC duty.
-    TEST_ASSERT_EQUAL(16, ledc_set_duty_fake.call_count);
-
-    // Confirm the LEDC duty for the front left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[8]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg1_history[8]);       // config.Front_Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[8]);     // 0.0
-
-    // Confirm the LEDC duty for the front left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[9]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(1, ledc_set_duty_fake.arg1_history[9]);       // config.Front_Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(200, ledc_set_duty_fake.arg2_history[9]);     // Current_Speed
-
-    // Confirm the LEDC duty for the front right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[10]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(2, ledc_set_duty_fake.arg1_history[10]);       // config.Front_Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[10]);     // 0.0
-
-    // Confirm the LEDC duty for the front right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[11]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(3, ledc_set_duty_fake.arg1_history[11]);       // config.Front_Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(200, ledc_set_duty_fake.arg2_history[11]);     // Current_Speed
-
-    // Confirm the LEDC duty for the back left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[12]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(5, ledc_set_duty_fake.arg1_history[12]);       // config.Back_Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[12]);     // 0.0
-
-    // Confirm the LEDC duty for the back left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[13]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.arg1_history[13]);       // config.Back_Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(200, ledc_set_duty_fake.arg2_history[13]);     // Current_Speed
-
-    // Confirm the LEDC duty for the back right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[14]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(7, ledc_set_duty_fake.arg1_history[14]);       // config.Back_Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[14]);     // 0.0
-
-    // Confirm the LEDC duty for the back right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[15]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(6, ledc_set_duty_fake.arg1_history[15]);       // config.Back_Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(200, ledc_set_duty_fake.arg2_history[15]);     // Current_Speed
-
-    // Multiply the duration by the number of pulses per second to simulate the ISR handler being called
-    // that many times per second.
-    for (uint32_t i = 0; i < (duration * pulses_per_second); i++) {
-        Wheel_Encoder::isr_handler(&l_encoder);
-        Wheel_Encoder::isr_handler(&r_encoder);
-    }
-
-    // Confirm the pulse count after moving forward for the specified duration.
-    TEST_ASSERT_EQUAL(75, l_encoder.pulse_count);
-    TEST_ASSERT_EQUAL(75, r_encoder.pulse_count);
-    //  ============================================================
-
-
-    /*
-        ============================================================
-        Test 4: Check if the fake LEDC hardware is correctly called
-        in turn_left(). Also verify the Interrupt Service Routine
-        gets triggered and performs pulse counting.
-        ============================================================
-    */
-
-    d_train.change_speed(225, 225);
-    d_train.turn_left();
-
-    // Assume that we are turning left for 3 seconds.
-    duration = 3;
-
-    // The number of pulses counted per second based on the speed of the motors.
-    // This number is based on the actual hardware and will need to be adjusted if the
-    // speed or hardware changes.
-    pulses_per_second = 28;
-
-    // Verify the pulse count is 0 before performing the count.
-    l_encoder.reset_count();
-    r_encoder.reset_count();
-    TEST_ASSERT_EQUAL(0, l_encoder.pulse_count);
-    TEST_ASSERT_EQUAL(0, r_encoder.pulse_count);
-
-    // Confirm the number of calls for the LEDC duty.
-    TEST_ASSERT_EQUAL(24, ledc_set_duty_fake.call_count);
-
-    // Confirm the LEDC duty for the front left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[16]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg1_history[16]);       // config.Front_Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[16]);     // 0.0
-
-    // Confirm the LEDC duty for the front left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[17]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(1, ledc_set_duty_fake.arg1_history[17]);       // config.Front_Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(225, ledc_set_duty_fake.arg2_history[17]);     // Current_Speed
-
-    // Confirm the LEDC duty for the front right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[18]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(2, ledc_set_duty_fake.arg1_history[18]);       // config.Front_Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(225, ledc_set_duty_fake.arg2_history[18]);     // Current_Speed
-
-    // Confirm the LEDC duty for the front right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[19]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(3, ledc_set_duty_fake.arg1_history[19]);       // config.Front_Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[19]);     // 0.0
-
-    // Confirm the LEDC duty for the back left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[20]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(5, ledc_set_duty_fake.arg1_history[20]);       // config.Back_Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[20]);     // 0.0
-
-    // Confirm the LEDC duty for the back left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[21]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.arg1_history[21]);       // config.Back_Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(225, ledc_set_duty_fake.arg2_history[21]);     // Current_Speed
-
-    // Confirm the LEDC duty for the back right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[22]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(7, ledc_set_duty_fake.arg1_history[22]);       // config.Back_Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(225, ledc_set_duty_fake.arg2_history[22]);     // Current_Speed
-
-    // Confirm the LEDC duty for the back right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[23]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(6, ledc_set_duty_fake.arg1_history[23]);       // config.Back_Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[23]);     // 0.0
-
-    // Multiply the duration by the number of pulses per second to simulate the ISR handler being called
-    // that many times per second.
-    for (uint32_t i = 0; i < (duration * pulses_per_second); i++) {
-        Wheel_Encoder::isr_handler(&l_encoder);
-        Wheel_Encoder::isr_handler(&r_encoder);
-    }
-
-    // Confirm the pulse count after moving forward for the specified duration.
-    TEST_ASSERT_EQUAL(84, l_encoder.pulse_count);
-    TEST_ASSERT_EQUAL(84, r_encoder.pulse_count);
-    //  ============================================================
-
-
-    /*
-        ============================================================
-        Test 5: Check if the fake LEDC hardware is correctly called
-        in turn_right(). Also verify the Interrupt Service Routine
-        gets triggered and performs pulse counting.
-        ============================================================
-    */
-
-    d_train.change_speed(210, 210);
-    d_train.turn_right();
-
-    // Assume that we are turning right for 3 seconds.
-    duration = 3;
-
-    // The number of pulses counted per second based on the speed of the motors.
-    // This number is based on the actual hardware and will need to be adjusted if the
-    // speed or hardware changes.
-    pulses_per_second = 27;
-
-    // Verify the pulse count is 0 before performing the count.
-    l_encoder.reset_count();
-    r_encoder.reset_count();
-    TEST_ASSERT_EQUAL(0, l_encoder.pulse_count);
-    TEST_ASSERT_EQUAL(0, r_encoder.pulse_count);
-
-    // Confirm the number of calls for the LEDC duty.
-    TEST_ASSERT_EQUAL(32, ledc_set_duty_fake.call_count);
-
-    // Confirm the LEDC duty for the front left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[24]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg1_history[24]);       // config.Front_Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(210, ledc_set_duty_fake.arg2_history[24]);     // Current_Speed
-
-    // Confirm the LEDC duty for the front left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[25]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(1, ledc_set_duty_fake.arg1_history[25]);       // config.Front_Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[25]);     // 0.0
-
-    // Confirm the LEDC duty for the front right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[26]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(2, ledc_set_duty_fake.arg1_history[26]);       // config.Front_Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[26]);     // 0.0
-
-    // Confirm the LEDC duty for the front right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[27]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(3, ledc_set_duty_fake.arg1_history[27]);       // config.Front_Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(210, ledc_set_duty_fake.arg2_history[27]);     // Current_Speed
-
-    // Confirm the LEDC duty for the back left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[28]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(5, ledc_set_duty_fake.arg1_history[28]);       // config.Back_Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(210, ledc_set_duty_fake.arg2_history[28]);     // Current_Speed
-
-    // Confirm the LEDC duty for the back left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[29]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.arg1_history[29]);       // config.Back_Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[29]);     // 0.0
-
-    // Confirm the LEDC duty for the back right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[30]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(7, ledc_set_duty_fake.arg1_history[30]);       // config.Back_Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[30]);     // 0.0
-
-    // Confirm the LEDC duty for the back right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[31]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(6, ledc_set_duty_fake.arg1_history[31]);       // config.Back_Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(210, ledc_set_duty_fake.arg2_history[31]);     // Current_Speed
-
-    // Multiply the duration by the number of pulses per second to simulate the ISR handler being called
-    // that many times per second.
-    for (uint32_t i = 0; i < (duration * pulses_per_second); i++) {
-        Wheel_Encoder::isr_handler(&l_encoder);
-        Wheel_Encoder::isr_handler(&r_encoder);
-    }
-
-    // Confirm the pulse count after moving forward for the specified duration.
-    TEST_ASSERT_EQUAL(81, l_encoder.pulse_count);
-    TEST_ASSERT_EQUAL(81, r_encoder.pulse_count);
-    //  ============================================================
-
-    
-    /*
-        ============================================================
-        Test 6: Check if the fake LEDC hardware is correctly called
-        in turn_right(). Also verify the Interrupt Service Routine
-        gets triggered and performs pulse counting.
-        ============================================================
-    */
-
-    d_train.brake_all();
-
-    // Verify the pulse count is 0.
-    l_encoder.reset_count();
-    r_encoder.reset_count();
-    TEST_ASSERT_EQUAL(0, l_encoder.pulse_count);
-    TEST_ASSERT_EQUAL(0, r_encoder.pulse_count);
-
-    // Confirm the number of calls for the LEDC duty.
-    TEST_ASSERT_EQUAL(40, ledc_set_duty_fake.call_count);
-
-    // Confirm the LEDC duty for the front left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[32]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg1_history[32]);       // config.Front_Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[32]);     // 0.0
-
-    // Confirm the LEDC duty for the front left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[33]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(1, ledc_set_duty_fake.arg1_history[33]);       // config.Front_Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[33]);     // 0.0
-
-    // Confirm the LEDC duty for the front right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[34]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(2, ledc_set_duty_fake.arg1_history[34]);       // config.Front_Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[34]);     // 0.0
-
-    // Confirm the LEDC duty for the front right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[35]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(3, ledc_set_duty_fake.arg1_history[35]);       // config.Front_Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[35]);     // 0.0
-
-    // Confirm the LEDC duty for the back left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[36]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(5, ledc_set_duty_fake.arg1_history[36]);       // config.Back_Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[36]);     // 0.0
-
-    // Confirm the LEDC duty for the back left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[37]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.arg1_history[37]);       // config.Back_Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[37]);     // 0.0
-
-    // Confirm the LEDC duty for the back right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[38]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(7, ledc_set_duty_fake.arg1_history[38]);       // config.Back_Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[38]);     // 0.0
-
-    // Confirm the LEDC duty for the back right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[39]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(6, ledc_set_duty_fake.arg1_history[39]);       // config.Back_Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[39]);     // 0.0
-    //  ============================================================
+    // Confirm that the drive train is initialized and its task is created.
+    test_drive_train_initialization(d_train);
+
+    // Confirm the robot moved forward.
+    // expected motor duties in order: fl_1, fl_2, fr_1, fr_2, bl_1, bl_2, br_1, br_2
+    expected_duties[0] = 255;
+    expected_duties[1] = 0.0;
+    expected_duties[2] = 255;
+    expected_duties[3] = 0.0;
+    expected_duties[4] = 255;
+    expected_duties[5] = 0.0;
+    expected_duties[6] = 255;
+    expected_duties[7] = 0.0;
+    test_drive_train_movement(d_train, movement::FORWARD, 255, 3, 30, 8);
+
+    // Confirm the robot moved backward.
+    // expected motor duties in order: fl_1, fl_2, fr_1, fr_2, bl_1, bl_2, br_1, br_2
+    expected_duties[0] = 0.0;
+    expected_duties[1] = 200;
+    expected_duties[2] = 0.0;
+    expected_duties[3] = 200;
+    expected_duties[4] = 0.0;
+    expected_duties[5] = 200;
+    expected_duties[6] = 0.0;
+    expected_duties[7] = 200;
+    test_drive_train_movement(d_train, movement::BACKWARD, 200, 3, 25, 16);
+
+    // Confirm the robot turned left.
+    // expected motor duties in order: fl_1, fl_2, fr_1, fr_2, bl_1, bl_2, br_1, br_2
+    expected_duties[0] = 0.0;
+    expected_duties[1] = 225;
+    expected_duties[2] = 225;
+    expected_duties[3] = 0.0;
+    expected_duties[4] = 0.0;
+    expected_duties[5] = 225;
+    expected_duties[6] = 225;
+    expected_duties[7] = 0.0;
+    test_drive_train_movement(d_train, movement::LEFT, 225, 3, 28, 24);
+
+    // Confirm the robot turned right.
+    // expected motor duties in order: fl_1, fl_2, fr_1, fr_2, bl_1, bl_2, br_1, br_2
+    expected_duties[0] = 210;
+    expected_duties[1] = 0.0;
+    expected_duties[2] = 0.0;
+    expected_duties[3] = 210;
+    expected_duties[4] = 210;
+    expected_duties[5] = 0.0;
+    expected_duties[6] = 0.0;
+    expected_duties[7] = 210;
+    test_drive_train_movement(d_train, movement::RIGHT, 210, 3, 27, 32);
+
+    // Confirm the robot stopped.
+    // expected motor duties in order: fl_1, fl_2, fr_1, fr_2, bl_1, bl_2, br_1, br_2
+    expected_duties[0] = 0.0;
+    expected_duties[1] = 0.0;
+    expected_duties[2] = 0.0;
+    expected_duties[3] = 0.0;
+    expected_duties[4] = 0.0;
+    expected_duties[5] = 0.0;
+    expected_duties[6] = 0.0;
+    expected_duties[7] = 0.0;
+    test_drive_train_movement(d_train, movement::STOP, 0, 3, 100, 40);
+
+    // Confirm the drive train task works.
+    test_drive_train_task(d_train);
 
     return;
 }

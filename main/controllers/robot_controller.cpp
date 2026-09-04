@@ -178,18 +178,14 @@ BaseType_t Robot_Controller::received_new_command(Robot_Command &command) {
 void Robot_Controller::execute_active_command() {
     Robot_Command command = get_active_command();
 
-    // Reset the wheel encoders' pulse counts before executing the new command.
-    drive_train.get_left_encoder().reset_count();
-    drive_train.get_right_encoder().reset_count();
-
     // Update the robot's movement with the new command and reset the timer.
     set_robot_state(command.target_state);
-    drive_train.change_speed(command.speed, command.speed);
+    set_robot_speed(command.speed);
+    
     start_timer();
-
     Robot_State state = get_robot_state();
-
     new_command = true;
+    
     ESP_LOGI(
         TAG,
         "Current movement is [%s] with speeds -- Left wheel(s): [%lu], Right Wheel(s): [%lu].",
@@ -267,6 +263,18 @@ Robot_State Robot_Controller::get_robot_state() {
 */
 void Robot_Controller::set_robot_state(const Robot_State &new_state) {
     current_state = new_state;
+    return;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Updates the robot's current speed with a new one.
+    ============================================================
+*/
+void Robot_Controller::set_robot_speed(const uint32_t &speed) {
+    drive_train.change_speed(speed, speed);
     return;
 }
 //  ============================================================
