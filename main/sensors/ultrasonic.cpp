@@ -71,19 +71,19 @@ Ultrasonic::Ultrasonic(const Ultrasonic_Config &ultrasonic_setup) : config(ultra
 void IRAM_ATTR Ultrasonic::isr_handler(void *arg) {
     Ultrasonic *us = static_cast<Ultrasonic*>(arg);
 
-    int64_t now = esp_timer_get_time();
-    int level = gpio_get_level(us->config.echo_pin);
+    uint32_t now = (uint32_t)esp_timer_get_time();
+    int level = gpio_get_level(us->get_echo_pin());
 
     // Start recording the time when ECHO pin is high.
     if (level == 1) {
-        us->start_echo = now;
+        us->set_start_echo_time(now);
     }
     // Stop recording the time and calculate the object's distance when ECHO pin is low.
     else {
-        if (us->start_echo > 0) {
-            int64_t duration = now - us->start_echo;
-            us->distance = (static_cast<double>(duration) * 0.343) / 2.0;
-            us->start_echo = 0;
+        if (us->get_start_echo_time() > 0) {
+            uint32_t duration = now - us->get_start_echo_time();
+            us->set_distance((static_cast<double>(duration) * 0.343) / 2.0);
+            us->set_start_echo_time(0);
         }
     }
 
@@ -101,34 +101,100 @@ void IRAM_ATTR Ultrasonic::isr_handler(void *arg) {
 */
 void Ultrasonic::measure_distance() {
     // Reset ECHO signal duration before sending new signal.
-    start_echo = 0;
+    set_start_echo_time(0);
+    set_distance(-1.0);
 
     // Send TRIG pulse for 10us. This will trigger the ISR above.
-    gpio_set_level(config.trig_pin, 1);
+    gpio_set_level(get_trig_pin(), 1);
     esp_rom_delay_us(10);
-    gpio_set_level(config.trig_pin, 0);
+    gpio_set_level(get_trig_pin(), 0);
 
-    // Give ECHO signal 30ms to return.
-    int wait_us = 0;
-    while ((start_echo == 0) && (wait_us < 30000)) {
-        esp_rom_delay_us(100);
-        wait_us += 100;
+    // Calculate timeout in ticks.
+    TickType_t timeout_ticks = pdMS_TO_TICKS(30);
+    TickType_t start_tick = xTaskGetTickCount();
+
+    // Sleep until the ISR calculates a positive distance or we reach timeout.
+    while ((get_distance() < 0) && (xTaskGetTickCount() - start_tick < timeout_ticks)) {
+        vTaskDelay(1);
     }
 
-    // Wait until ECHO signal returns or timeout is reached.
-    while ((gpio_get_level(config.echo_pin) == 1) && (wait_us < 30000)) {
-        esp_rom_delay_us(100);
-        wait_us += 100;
-    }
-
-    if ((wait_us >= 30000) || (distance <= 0)) {
-        distance = 1000.0;
+    // Print log based on whether timeout was reached or we detected an object.
+    if (get_distance() < 0) {
+        set_distance(-1.0);
         ESP_LOGI(config.name.c_str(), "Signal was lost or out of range.");
     }
     else {
-        ESP_LOGI(config.name.c_str(), "Object detected at %0.4fmm.", distance);
+        ESP_LOGI(config.name.c_str(), "Object detected at %0.4fmm.", get_distance());
     }
 
     return;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieve calculated distance.
+    ============================================================
+*/
+double Ultrasonic::get_distance() {
+    return distance;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Record calculated distance.
+    ============================================================
+*/
+void Ultrasonic::set_distance(double dist) {
+    distance = dist;
+    return;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieve echo's start time.
+    ============================================================
+*/
+uint32_t Ultrasonic::get_start_echo_time() {
+    return start_echo_time;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Record echo's start time.
+    ============================================================
+*/
+void Ultrasonic::set_start_echo_time(uint32_t time) {
+    start_echo_time = time;
+    return;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieve echo pin.
+    ============================================================
+*/
+gpio_num_t Ultrasonic::get_echo_pin() {
+    return config.echo_pin;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieve trig pin.
+    ============================================================
+*/
+gpio_num_t Ultrasonic::get_trig_pin() {
+    return config.trig_pin;
 }
 //  ============================================================

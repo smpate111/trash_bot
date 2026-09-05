@@ -220,8 +220,8 @@ void test_command_routing(
         TEST_ASSERT_EQUAL(portMAX_DELAY, xQueueSend_fake.arg2_history[send_expected_call_index - 1]);
 
         // Set random encoder pulses to prove they get reset by the controller.
-        d_train.get_left_encoder().pulse_count = send_expected_call_index * 5;
-        d_train.get_right_encoder().pulse_count = send_expected_call_index * 5;
+        d_train.get_left_encoder().set_pulse_count(send_expected_call_index * 5);
+        d_train.get_right_encoder().set_pulse_count(send_expected_call_index * 5);
 
         // Capture LEDC hardware call count.
         int initial_ledc_count = ledc_set_duty_fake.call_count;

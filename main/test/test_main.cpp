@@ -15,8 +15,8 @@
 
 #include <test/test_motor_logic.cpp>
 #include <test/test_motor_driver_logic.cpp>
-#include <test/test_ultrasonic_logic.cpp>
 #include <test/test_wheel_encoder_logic.cpp>
+#include <test/test_ultrasonic_logic.cpp>
 
 #include <test/test_drive_train_logic.cpp>
 #include <test/test_robot_controller_logic.cpp>
@@ -119,9 +119,9 @@ extern "C" void app_main(void) {
 
     // Test the hardware.
     RUN_TEST(test_motor_functions);
-    RUN_TEST(test_ultrasonic_functions);
-    RUN_TEST(test_wheel_encoder_functions);
     RUN_TEST(test_motor_driver_functions);
+    RUN_TEST(test_wheel_encoder_functions);
+    RUN_TEST(test_ultrasonic_functions);
 
     // Test the controllers.
     RUN_TEST(test_drive_train_functions);

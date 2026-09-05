@@ -65,11 +65,13 @@ class Wheel_Encoder {
         virtual double calculate_distance();
         //virtual double measure_velocity();
 
-        volatile uint32_t pulse_count = 0;
+        uint32_t get_pulse_count() const;
+        void set_pulse_count(uint32_t count);
 
     // Set these variables to private to prevent access and modifications from outside the class.
     private:
         Encoder_Config config;
+        volatile uint32_t pulse_count = 0;
         volatile uint32_t last_pulse_count = 0;
         volatile uint32_t pulse_difference = 0;
 };

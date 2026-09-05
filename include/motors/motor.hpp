@@ -57,6 +57,8 @@ class Motor {
         virtual ~Motor() = default;
 
         virtual void set_speed(uint32_t speed);
+        uint32_t get_speed();
+
         virtual void spin_forward();
         virtual void spin_backward();
         virtual void stop();

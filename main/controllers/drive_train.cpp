@@ -78,8 +78,8 @@ void Drive_Train::loop_tick() {
     // Retrieve the pulse counts.
     Wheel_Encoder &l_encoder = get_left_encoder();
     Wheel_Encoder &r_encoder = get_right_encoder();
-    uint32_t l_pulses = get_pulse_count(l_encoder);
-    uint32_t r_pulses = get_pulse_count(r_encoder);
+    uint32_t l_pulses = get_pulses(l_encoder);
+    uint32_t r_pulses = get_pulses(r_encoder);
     set_l_distance(l_encoder.calculate_distance());
     set_r_distance(r_encoder.calculate_distance());
     
@@ -232,8 +232,8 @@ Wheel_Encoder& Drive_Train::get_right_encoder() {
     Gets the wheel encoder's pulse count.
     ============================================================
 */
-uint32_t Drive_Train::get_pulse_count(const Wheel_Encoder &encoder) {
-    return encoder.pulse_count;
+uint32_t Drive_Train::get_pulses(const Wheel_Encoder &encoder) {
+    return encoder.get_pulse_count();
 }
 //  ============================================================
 

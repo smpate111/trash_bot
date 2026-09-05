@@ -166,8 +166,8 @@ void test_drive_train_movement(
         l_encoder.reset_count();
         r_encoder.reset_count();
         
-        TEST_ASSERT_EQUAL(0, d_train.get_pulse_count(l_encoder));
-        TEST_ASSERT_EQUAL(0, d_train.get_pulse_count(r_encoder));
+        TEST_ASSERT_EQUAL(0, d_train.get_pulses(l_encoder));
+        TEST_ASSERT_EQUAL(0, d_train.get_pulses(r_encoder));
 
         // Verify the movement.
         d_train.change_speed(speed, speed);
@@ -217,8 +217,8 @@ void test_drive_train_movement(
             }
 
             // Confirm the pulse count after moving for the specified duration.
-            TEST_ASSERT_EQUAL(duration * pulses_per_second, d_train.get_pulse_count(l_encoder));
-            TEST_ASSERT_EQUAL(duration * pulses_per_second, d_train.get_pulse_count(r_encoder));
+            TEST_ASSERT_EQUAL(duration * pulses_per_second, d_train.get_pulses(l_encoder));
+            TEST_ASSERT_EQUAL(duration * pulses_per_second, d_train.get_pulses(r_encoder));
         }
         return;
 }
@@ -238,23 +238,23 @@ void test_drive_train_task(Drive_Train &d_train) {
     // Reset the pulse counts.
     l_encoder.reset_count();
     r_encoder.reset_count();
-    TEST_ASSERT_EQUAL(0, d_train.get_pulse_count(l_encoder));
-    TEST_ASSERT_EQUAL(0, d_train.get_pulse_count(r_encoder));
+    TEST_ASSERT_EQUAL(0, d_train.get_pulses(l_encoder));
+    TEST_ASSERT_EQUAL(0, d_train.get_pulses(r_encoder));
 
     // Simulate the wheel encoders pulsed 20 times.
-    l_encoder.pulse_count = 20;
-    r_encoder.pulse_count = 20;
+    l_encoder.set_pulse_count(20);
+    r_encoder.set_pulse_count(20);
     
     // Confirm the robot is moving.
     d_train.loop_tick();
-    TEST_ASSERT_EQUAL(d_train.get_last_l_pulses(), d_train.get_pulse_count(l_encoder));
-    TEST_ASSERT_EQUAL(d_train.get_last_r_pulses(), d_train.get_pulse_count(r_encoder));
+    TEST_ASSERT_EQUAL(d_train.get_last_l_pulses(), d_train.get_pulses(l_encoder));
+    TEST_ASSERT_EQUAL(d_train.get_last_r_pulses(), d_train.get_pulses(r_encoder));
     TEST_ASSERT_EQUAL(false, d_train.stopped_recently);
 
     // Confirm the robot stopped moving.
     d_train.loop_tick();
-    TEST_ASSERT_EQUAL(0, d_train.get_pulse_count(l_encoder));
-    TEST_ASSERT_EQUAL(0, d_train.get_pulse_count(r_encoder));
+    TEST_ASSERT_EQUAL(0, d_train.get_pulses(l_encoder));
+    TEST_ASSERT_EQUAL(0, d_train.get_pulses(r_encoder));
     TEST_ASSERT_EQUAL(0, d_train.get_last_l_pulses());
     TEST_ASSERT_EQUAL(0, d_train.get_last_r_pulses());
     TEST_ASSERT_EQUAL(0.0, d_train.get_l_distance());

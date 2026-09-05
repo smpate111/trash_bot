@@ -55,7 +55,7 @@ Wheel_Encoder::Wheel_Encoder(const Encoder_Config &encoder_setup) : config(encod
 */
 void IRAM_ATTR Wheel_Encoder::isr_handler(void *arg) {
     Wheel_Encoder *we = static_cast<Wheel_Encoder*>(arg);
-    we->pulse_count = we->pulse_count + 1;
+    we->set_pulse_count(we->get_pulse_count() + 1);
     return;
 }
 //  ============================================================
@@ -68,8 +68,9 @@ void IRAM_ATTR Wheel_Encoder::isr_handler(void *arg) {
     ============================================================
 */
 void Wheel_Encoder::reset_count() {
-    ESP_LOGI(config.name.c_str(), "Total pulses counted is: %lu. Resetting count to 0.", pulse_count);
-    pulse_count = 0;
+    ESP_LOGI(config.name.c_str(), "Total pulses counted is: %lu. Resetting count to 0.", get_pulse_count());
+    //pulse_count = 0;
+    set_pulse_count(0);
     return;
 }
 //  ============================================================
@@ -83,7 +84,7 @@ void Wheel_Encoder::reset_count() {
     ============================================================
 */
 double Wheel_Encoder::calculate_distance() {
-    double distance = pulse_count * ((3.142857 * config.wheel_diameter) / config.encoder_slots);
+    double distance = get_pulse_count() * ((3.142857 * config.wheel_diameter) / config.encoder_slots);
     //ESP_LOGI(config.name.c_str(), "Distance traveled is: %0.4fmm.", distance);
     return distance;
 }
@@ -105,4 +106,27 @@ double Wheel_Encoder::measure_velocity() {
     return static_cast<double>((pulse_difference / config.encoder_slots) * 60.0);
 }
 */
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieve the wheel encoder's pulse count.
+    ============================================================
+*/
+uint32_t Wheel_Encoder::get_pulse_count() const {
+    return pulse_count;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Record the wheel encoder's pulse count.
+    ============================================================
+*/
+void Wheel_Encoder::set_pulse_count(uint32_t count) {
+    pulse_count = count;
+    return;
+}
 //  ============================================================

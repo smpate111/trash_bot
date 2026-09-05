@@ -54,12 +54,12 @@ class Drive_Train {
         virtual void turn_right();
         virtual void brake_all();
 
-        Wheel_Encoder& get_left_encoder();
-        Wheel_Encoder& get_right_encoder();
-        uint32_t get_pulse_count(const Wheel_Encoder &encoder);
-
         void start_task();
         void loop_tick();
+
+        Wheel_Encoder& get_left_encoder();
+        Wheel_Encoder& get_right_encoder();
+        uint32_t get_pulses(const Wheel_Encoder &encoder);
 
         void set_l_distance(double distance);
         double get_l_distance();

@@ -48,9 +48,16 @@ class Obstacle_Avoidance {
     public:
         explicit Obstacle_Avoidance(const Avoid_Config &avoid_setup);
         virtual ~Obstacle_Avoidance() = default;
+
         void start_task();
+        void loop_tick();
+
         double measure_object_distance(Robot_State current_state, double current_distance);
         void determine_emergency_stop(double current_distance);
+
+        Robot_Controller& get_controller();
+        Ultrasonic& get_ultrasonic_sensor(const char* sensor);
+        double get_distance_threshold();
 
         Avoid_Config config;
         const char* sensor_strings[4] = {

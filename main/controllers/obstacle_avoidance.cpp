@@ -58,34 +58,51 @@ void Obstacle_Avoidance::task_queue(void *arg) {
 */
 void Obstacle_Avoidance::avoidance_loop() {
     while (true) {
-        // Reset the current calculated distance and state.
-        double current_distance = 10000.0;   // Set it to an arbitrarily high number to avoid creating bugs.
-        Robot_State current_state = config.controller->get_robot_state();
-
-        if ((stopped_recently == true) && (current_state != Robot_State::BRAKE)) {
-            ESP_LOGI(
-                TAG,
-                "Current movement is [%s]. Using [%s] ultrasonic sensor.",
-                config.controller->state_strings[current_state],
-                sensor_strings[current_state]
-            );
-        }
-        else if ((stopped_recently == false) && (current_state == Robot_State::BRAKE)) {
-            ESP_LOGI(
-                TAG,
-                "Current movement is [%s]. Not using any ultrasonic sensors.",
-                config.controller->state_strings[current_state]
-            );
-        }
-
-        // Determine if the robot needs to perform an emergency stop upon detected object.
-        current_distance = measure_object_distance(current_state, current_distance);
-        determine_emergency_stop(current_distance);
-
-        // Add a 50ms delay to give signal time to trigger and come back to sensor.
-        vTaskDelay(pdMS_TO_TICKS(50));
+        loop_tick();
     }
 
+    return;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    This tick function gets executed for every iteration in the
+    infinite while loop above because we want to test the logic
+    without having to access avoidance_loop() and get stuck in
+    that loop.
+    ============================================================
+*/
+void Obstacle_Avoidance::loop_tick() {
+    // Reset the current calculated distance and state.
+    double current_distance = 10000.0;   // Set it to an arbitrarily high number to avoid creating bugs.
+
+    Robot_Controller &controller = get_controller();
+    Robot_State current_state = controller.get_robot_state();
+
+    if ((stopped_recently == true) && (current_state != Robot_State::BRAKE)) {
+        ESP_LOGI(
+            TAG,
+            "Current movement is [%s]. Using [%s] ultrasonic sensor.",
+            controller.state_strings[current_state],
+            sensor_strings[current_state]
+        );
+    }
+    else if ((stopped_recently == false) && (current_state == Robot_State::BRAKE)) {
+        ESP_LOGI(
+            TAG,
+            "Current movement is [%s]. Not using any ultrasonic sensors.",
+            controller.state_strings[current_state]
+        );
+    }
+
+    // Determine if the robot needs to perform an emergency stop upon detected object.
+    current_distance = measure_object_distance(current_state, current_distance);
+    determine_emergency_stop(current_distance);
+
+    // Add a 50ms delay to give signal time to trigger and come back to sensor.
+    vTaskDelay(pdMS_TO_TICKS(50));
     return;
 }
 //  ============================================================
@@ -99,29 +116,37 @@ void Obstacle_Avoidance::avoidance_loop() {
 */
 double Obstacle_Avoidance::measure_object_distance(Robot_State current_state, double current_distance) {
     switch (current_state) {
-        case Robot_State::MOVE_FORWARD:
-            config.front_sensor->measure_distance();
-            current_distance = config.front_sensor->distance;
+        case Robot_State::MOVE_FORWARD: {
+            Ultrasonic& front_sensor = get_ultrasonic_sensor("FRONT");
+            front_sensor.measure_distance();
+            current_distance = front_sensor.get_distance();
             stopped_recently = false;
             break;
+        }
 
-        case Robot_State::MOVE_BACKWARD:
-            config.back_sensor->measure_distance();
-            current_distance = config.back_sensor->distance;
+        case Robot_State::MOVE_BACKWARD: {
+            Ultrasonic& back_sensor = get_ultrasonic_sensor("BACK");
+            back_sensor.measure_distance();
+            current_distance = back_sensor.get_distance();
             stopped_recently = false;
             break;
+        }
 
-        case Robot_State::TURN_LEFT:
-            config.left_sensor->measure_distance();
-            current_distance = config.left_sensor->distance;
+        case Robot_State::TURN_LEFT: {
+            Ultrasonic& left_sensor = get_ultrasonic_sensor("LEFT");
+            left_sensor.measure_distance();
+            current_distance = left_sensor.get_distance();
             stopped_recently = false;
             break;
+        }
 
-        case Robot_State::TURN_RIGHT:
-            config.right_sensor->measure_distance();
-            current_distance = config.right_sensor->distance;
+        case Robot_State::TURN_RIGHT: {
+            Ultrasonic& right_sensor = get_ultrasonic_sensor("RIGHT");
+            right_sensor.measure_distance();
+            current_distance = right_sensor.get_distance();
             stopped_recently = false;
             break;
+        }
 
         case Robot_State::BRAKE:
             stopped_recently = true;
@@ -141,8 +166,10 @@ double Obstacle_Avoidance::measure_object_distance(Robot_State current_state, do
     ============================================================
 */
 void Obstacle_Avoidance::determine_emergency_stop(double current_distance) {
+    Robot_Controller &controller = get_controller();
+
     // Perform emergency stop if an ultrasonic sensor detects an object past the distance threshold.
-    if (current_distance < distance_threshold) {
+    if (current_distance < get_distance_threshold()) {
         if (stopped_recently == false) {
             ESP_LOGI(
                 TAG_1,
@@ -151,9 +178,58 @@ void Obstacle_Avoidance::determine_emergency_stop(double current_distance) {
             );
         }
 
-        config.controller->emergency_stop();
+        //config.controller->emergency_stop();
+        controller.emergency_stop();
     }
 
     return;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieve robot controller object.
+    ============================================================
+*/
+Robot_Controller& Obstacle_Avoidance::get_controller() {
+    return *(config.controller);
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieve ultrasonic sensor object.
+    ============================================================
+*/
+Ultrasonic& Obstacle_Avoidance::get_ultrasonic_sensor(const char* sensor) {
+    if (sensor == sensor_strings[0]) {
+        return *(config.front_sensor);
+    }
+    else if (sensor == sensor_strings[1]) {
+        return *(config.back_sensor);
+    }
+    else if (sensor == sensor_strings[2]) {
+        return *(config.left_sensor);
+    }
+    else if (sensor == sensor_strings[3]) {
+        return *(config.right_sensor);
+    }
+    else {
+        ESP_LOGE(TAG, "Error: Couldn't retrieve ultrasonic sensor with the provided name. Exiting program to prevent bugs/undefined behavior.");
+        return *(config.front_sensor);  // This will stop the compiler from complaining about not returning object.
+    }
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieve distance threshold.
+    ============================================================
+*/
+double Obstacle_Avoidance::get_distance_threshold() {
+    return distance_threshold;
 }
 //  ============================================================

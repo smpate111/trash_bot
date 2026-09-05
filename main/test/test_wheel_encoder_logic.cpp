@@ -26,11 +26,7 @@
 */
 void test_wheel_encoder_functions(void) {
     // Create the wheel encoder object.
-    Encoder_Config config = {
-        "Encoder", GPIO_NUM_1,
-        80.0, 20
-    };
-
+    Encoder_Config config = {"Encoder", GPIO_NUM_1, 80.0, 20};
     Wheel_Encoder encoder(config);
 
 
@@ -67,7 +63,7 @@ void test_wheel_encoder_functions(void) {
     */
 
     // Verify the pulse count is 0 before performing the count.
-    TEST_ASSERT_EQUAL(0, encoder.pulse_count);
+    TEST_ASSERT_EQUAL(0, encoder.get_pulse_count());
 
     // Perform the count 5 times by calling the ISR handler 5 times.
     Wheel_Encoder::isr_handler(&encoder);
@@ -77,7 +73,7 @@ void test_wheel_encoder_functions(void) {
     Wheel_Encoder::isr_handler(&encoder);
 
     // Confirm the pulse count went up to 5.
-    TEST_ASSERT_EQUAL(5, encoder.pulse_count);
+    TEST_ASSERT_EQUAL(5, encoder.get_pulse_count());
 
     //  ============================================================
 
@@ -89,13 +85,13 @@ void test_wheel_encoder_functions(void) {
         ============================================================
     */
     // Set the pulse count to 20 to mimic 1 full rotation.
-    encoder.pulse_count = 20;
+    encoder.set_pulse_count(20);
 
     // Calculate the distance traveled using the same equation in calculate_distance().
-    double calculated_distance = encoder.pulse_count * ((3.142857 * config.wheel_diameter) / config.encoder_slots);
+    double calculated_distance = encoder.get_pulse_count() * ((3.142857 * config.wheel_diameter) / config.encoder_slots);
 
     // Confirm our calculated answer is the same as the answer received from calculate_distance().
-    TEST_ASSERT_FLOAT_WITHIN(0.001, calculated_distance, encoder.calculate_distance());
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, calculated_distance, encoder.calculate_distance());
     //  ============================================================
 
 
@@ -107,7 +103,7 @@ void test_wheel_encoder_functions(void) {
     */
     // Confirm that the pulse count resets to 0.
     encoder.reset_count();
-    TEST_ASSERT_EQUAL(0, encoder.pulse_count);
+    TEST_ASSERT_EQUAL(0, encoder.get_pulse_count());
     //  ============================================================
 
     return;

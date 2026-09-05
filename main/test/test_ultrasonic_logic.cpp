@@ -26,11 +26,7 @@
 */
 void test_ultrasonic_functions(void) {
     // Create the ultrasonic sensor object.
-    Ultrasonic_Config config = {
-        "Ultrasonic Sensor",
-        GPIO_NUM_2, GPIO_NUM_42
-    };
-
+    Ultrasonic_Config config = {"Ultrasonic Sensor", GPIO_NUM_2, GPIO_NUM_42};
     Ultrasonic ultrasonic(config);
 
 
@@ -71,7 +67,7 @@ void test_ultrasonic_functions(void) {
 
     // Simulate time passing for 1 second (in microseconds).
     int64_t start_time = 10000;
-    int64_t end_time = 11000;
+    int64_t end_time = 20000;
     int64_t times[2] = {start_time, end_time};
     SET_RETURN_SEQ(esp_timer_get_time, times, 2);
 
@@ -100,7 +96,7 @@ void test_ultrasonic_functions(void) {
     double calculated_distance = ((end_time - start_time) * 0.343) / 2.0;
 
     // Confirm our calculated answer is the same as the answer received from the previous test.
-    TEST_ASSERT_FLOAT_WITHIN(0.001, calculated_distance, ultrasonic.distance);
+    TEST_ASSERT_DOUBLE_WITHIN(0.001, calculated_distance, ultrasonic.get_distance());
 
     //  ============================================================
 

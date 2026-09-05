@@ -17,14 +17,14 @@
 #include <string>
 
 #include <../include/controllers/drive_train.hpp>
-//#include <../include/controllers/obstacle_avoidance.hpp>
 #include <../include/controllers/robot_controller.hpp>
+#include <../include/controllers/obstacle_avoidance.hpp>
 
 #include <../include/motors/motor.hpp>
 #include <../include/motors/motor_driver.hpp>
 
-#include <../include/sensors/ultrasonic.hpp>
 #include <../include/sensors/wheel_encoder.hpp>
+#include <../include/sensors/ultrasonic.hpp>
 //  ============================================================
 
 
@@ -300,7 +300,6 @@ void app_main(void) {
     // Configure the robot controller by passing the drive train.
     Robot_Controller controller(d_train);
 
-    /*
     // Configure the obstacle avoidance by defining which ultrasonic sensors
     // and robot controller it is going to control.
     Avoid_Config a_config = {
@@ -311,7 +310,6 @@ void app_main(void) {
 
     // Initialize the obstacle avoidance.
     Obstacle_Avoidance o_avoid(a_config);
-    */
 
 
     // Set a 2 second delay to give the program time to configure the settings.
@@ -325,8 +323,11 @@ void app_main(void) {
     // Start the robot controller task.
     controller.start_task();
 
+    // Start the obstacle avoidance task.
+    o_avoid.start_task();
+
     // Configure the navigation task by passing the robot controller.
-    xTaskCreate(Navigation_Task, "Naviation_Task", 4096, &controller, 5, nullptr);
+    xTaskCreate(Navigation_Task, "Navigation_Task", 4096, &controller, 5, nullptr);
 
     // Configure the odometry task by passing the drive train.
     //xTaskCreate(Odometry_Task, "Odometry_Task", 4096, &d_train, 4, nullptr);

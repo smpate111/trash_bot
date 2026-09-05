@@ -58,7 +58,7 @@ Motor::Motor(const Motor_Config &motor_setup) : config(motor_setup) {
 
 /*
     ============================================================
-    Adjust's the motor's speed between 0 to 255.
+    Record the motor's speed between 0 to 255.
     ============================================================
 */
 void Motor::set_speed(uint32_t speed) {
@@ -71,14 +71,25 @@ void Motor::set_speed(uint32_t speed) {
 
 /*
     ============================================================
+    Retrieve the motor's speed.
+    ============================================================
+*/
+uint32_t Motor::get_speed() {
+    return Current_Speed;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
     Spins the motor clockwise by setting the IN1 pin to
     HIGH and the IN2 pin to LOW.
     ============================================================
 */
 void Motor::spin_forward() {
-    ESP_LOGI(config.name.c_str(), "Spinning motor forward at speed: %lu.", Current_Speed);
+    ESP_LOGI(config.name.c_str(), "Spinning motor forward at speed: %lu.", get_speed());
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, Current_Speed);
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, get_speed());
     ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_1);
 
     ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, 0.0);
@@ -95,12 +106,12 @@ void Motor::spin_forward() {
     ============================================================
 */
 void Motor::spin_backward() {
-    ESP_LOGI(config.name.c_str(), "Spinning motor backward at speed: %lu.", Current_Speed);
+    ESP_LOGI(config.name.c_str(), "Spinning motor backward at speed: %lu.", get_speed());
 
     ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, 0.0);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_1);
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, Current_Speed);
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, get_speed());
     ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_2);
     return;
 }
@@ -118,10 +129,10 @@ void Motor::stop() {
 
     set_speed(0.0);
     
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, 0.0);
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, get_speed());
     ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_1);
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, 0.0);
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, get_speed());
     ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_2);
 
     return;

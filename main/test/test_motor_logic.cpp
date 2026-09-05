@@ -26,12 +26,7 @@
 */
 void test_motor_functions(void) {
     // Create the motor object.
-    Motor_Config config = {
-        "Motor",
-        GPIO_NUM_11, GPIO_NUM_12,
-        LEDC_CHANNEL_0, LEDC_CHANNEL_1
-    };
-
+    Motor_Config config = {"Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
     Motor motor(config);
 
 

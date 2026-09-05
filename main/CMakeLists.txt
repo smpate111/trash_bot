@@ -3,7 +3,7 @@ if (IDF_TARGET STREQUAL "linux")
     idf_component_register(
         SRCS
             "controllers/drive_train.cpp"
-            #"controllers/obstacle_avoidance.cpp"
+            "controllers/obstacle_avoidance.cpp"
             "controllers/robot_controller.cpp"
             
             "motors/motor.cpp"
@@ -36,7 +36,7 @@ else()
     idf_component_register(
         SRCS
             "controllers/drive_train.cpp"
-            #"controllers/obstacle_avoidance.cpp"
+            "controllers/obstacle_avoidance.cpp"
             "controllers/robot_controller.cpp"
             
             "motors/motor.cpp"
