@@ -101,15 +101,37 @@ void Robot_Controller::monitor_active_command() {
     Robot_State state = get_robot_state();
     Robot_Command command = get_active_command();
 
+    if ((emergency_lockout == true) && (state != Robot_State::BRAKE)) {
+        elapsed_ms = command.duration_ms * 2;
+    }
+
     // Stop executing the command when it reaches its duration.
     if (elapsed_ms >= command.duration_ms) {
         // Print log once after it reaches its duration.
         if (new_command == true) {
-            ESP_LOGI(
-                TAG,
-                "Reached the current movement's [%s] duration. Stopping the execution of this movement.",
-                state_strings[state]
-            );
+            // The emergency lockout is false and the robot state is any state.
+            if (!emergency_lockout) {
+                ESP_LOGI(
+                    TAG,
+                    "Reached the current movement's [%s] duration. Stopping the execution of this movement.",
+                    state_strings[state]
+                );
+            }
+            // The emergency lockout is true and the robot state is not brake.
+            else if (state != Robot_State::BRAKE) {
+                ESP_LOGI(
+                    TAG_1,
+                    "Emergency stop activated. Stopping the execution of current movement [%s].",
+                    state_strings[state]
+                );
+            }
+            // The emergency lockout is true and the robot state is brake.
+            else {
+                ESP_LOGI(
+                    TAG_1,
+                    "Reached the end of the emergency stop."
+                );
+            }
 
             new_command = false;
         }
@@ -128,6 +150,10 @@ void Robot_Controller::monitor_active_command() {
 void Robot_Controller::process_new_command() {
     // Calculate the command's elapsed time to determine if the robot should leave its current state.
     uint32_t elapsed_ms = (get_current_time() - get_start_time()) * portTICK_PERIOD_MS;
+
+    if ((emergency_lockout == true) && (get_robot_state() != Robot_State::BRAKE)) {
+        elapsed_ms = get_active_command().duration_ms * 2;
+    }
 
     // Execute the next command after the current command reached its duration.
     if (elapsed_ms >= get_active_command().duration_ms) {
@@ -150,6 +176,15 @@ void Robot_Controller::process_new_command() {
 
             set_active_command(brake);
             execute_active_command();
+        }
+        // Lift emergency lockout once the duration is over.
+        else if ((emergency_lockout) && (get_robot_state() == Robot_State::BRAKE)) {
+            emergency_lockout = false;
+
+            ESP_LOGI(
+                TAG_1,
+                "Emergency stop is over. Lifting emergency lockout."
+            );
         }
     }
 
@@ -361,12 +396,15 @@ void Robot_Controller::emergency_stop() {
         return;
     }
 
-    emergency_lockout = true;
+    
+    if (emergency_lockout == false) {
+        ESP_LOGI(
+            TAG_1,
+            "Emergency stop is activated. The robot has stopped and the command queue is cleared. New commands are rejected until the emergency lockout is lifted."
+        );
+    }
 
-    ESP_LOGI(
-        TAG_1,
-        "Emergency stop is activated. The robot has stopped and the command queue is cleared. New commands are rejected until the emergency lockout is lifted."
-    );
+    emergency_lockout = true;
     
     return;
 }

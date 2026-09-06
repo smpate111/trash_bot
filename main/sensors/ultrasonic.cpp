@@ -100,6 +100,11 @@ void IRAM_ATTR Ultrasonic::isr_handler(void *arg) {
     ============================================================
 */
 void Ultrasonic::measure_distance() {
+    // Check if we are testing so that we don't get stuck in an infinite loop.
+    if (is_testing == true) {
+        return;
+    }
+
     // Reset ECHO signal duration before sending new signal.
     set_start_echo_time(0);
     set_distance(-1.0);

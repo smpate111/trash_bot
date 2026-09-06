@@ -20,7 +20,7 @@
 
 #include <test/test_drive_train_logic.cpp>
 #include <test/test_robot_controller_logic.cpp>
-//#include <test/test_obstacle_avoidance_logic.cpp>
+#include <test/test_obstacle_avoidance_logic.cpp>
 //  ============================================================
 
 
@@ -126,7 +126,7 @@ extern "C" void app_main(void) {
     // Test the controllers.
     RUN_TEST(test_drive_train_functions);
     RUN_TEST(test_robot_controller_functions);
-    //RUN_TEST(test_obstacle_avoidance_functions);
+    RUN_TEST(test_obstacle_avoidance_functions);
 
     UNITY_END();
 

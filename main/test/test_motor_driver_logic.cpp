@@ -27,27 +27,14 @@
 */
 void test_motor_driver_functions(void) {
     // Create the motor objects.
-    Motor_Config l_config = {
-        "Left Motor",
-        GPIO_NUM_11, GPIO_NUM_12,
-        LEDC_CHANNEL_0, LEDC_CHANNEL_1
-    };
-
-    Motor_Config r_config = {
-        "Right Motor",
-        GPIO_NUM_13, GPIO_NUM_14,
-        LEDC_CHANNEL_2, LEDC_CHANNEL_3
-    };
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
 
     Motor l_motor(l_config);
     Motor r_motor(r_config);
 
     // Create the motor driver object.
-    Driver_Config config = {
-        "Driver",
-        l_motor, r_motor
-    };
-
+    Driver_Config config = {"Driver", l_motor, r_motor};
     Motor_Driver driver(config);
 
 

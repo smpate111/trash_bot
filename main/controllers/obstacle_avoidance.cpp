@@ -81,7 +81,7 @@ void Obstacle_Avoidance::loop_tick() {
     Robot_Controller &controller = get_controller();
     Robot_State current_state = controller.get_robot_state();
 
-    if ((stopped_recently == true) && (current_state != Robot_State::BRAKE)) {
+    if ((stopped_recently) && (current_state != Robot_State::BRAKE)) {
         ESP_LOGI(
             TAG,
             "Current movement is [%s]. Using [%s] ultrasonic sensor.",
@@ -89,7 +89,7 @@ void Obstacle_Avoidance::loop_tick() {
             sensor_strings[current_state]
         );
     }
-    else if ((stopped_recently == false) && (current_state == Robot_State::BRAKE)) {
+    else if ((!stopped_recently) && (current_state == Robot_State::BRAKE)) {
         ESP_LOGI(
             TAG,
             "Current movement is [%s]. Not using any ultrasonic sensors.",
@@ -170,7 +170,7 @@ void Obstacle_Avoidance::determine_emergency_stop(double current_distance) {
 
     // Perform emergency stop if an ultrasonic sensor detects an object past the distance threshold.
     if (current_distance < get_distance_threshold()) {
-        if (stopped_recently == false) {
+        if (!stopped_recently) {
             ESP_LOGI(
                 TAG_1,
                 "Object is detected at [%0.4fmm]. Performing emergency stop.",
@@ -178,7 +178,6 @@ void Obstacle_Avoidance::determine_emergency_stop(double current_distance) {
             );
         }
 
-        //config.controller->emergency_stop();
         controller.emergency_stop();
     }
 

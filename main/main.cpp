@@ -67,86 +67,6 @@ void Navigation_Task(void *arg) {
 
 /*
     ============================================================
-    This task handles obstacle avoidance where it controls the
-    4 ultrasonic sensors via the robot controller's state and
-    forces the robot to stop moving when an object is too
-    close to it.
-    ============================================================
-*/
-/*
-void Obstacle_Avoidance_Task(void *arg) {
-    Obstacle_Avoidance *o_avoid = static_cast<Obstacle_Avoidance*>(arg);
-    static const char* TAG = "Obstacle_Avoidance_Task";
-    static const char* TAG_1 = "Obstacle_Detected";
-    bool stopped_recently = false;
-
-    while (true) {
-        // Reset the current distance and grab the new state.
-        double current_distance = 1000.0;   // Set to 1000 to avoid bugs.
-        Robot_State current_state = o_avoid->config.controller->get_robot_state();
-
-        // Use 1 of the 4 ultrasonic sensors based on the current state. Also get the distance
-        // from that ultrasonic sensor.
-        switch (current_state) {
-            case Robot_State::MOVE_FORWARD:
-                //ESP_LOGI(TAG, "Current movement is FORWARD. Using Front Ultrasonic Sensor.");
-                o_avoid->config.front_sensor->measure_distance();
-                current_distance = o_avoid->config.front_sensor->distance;
-                stopped_recently = true;
-                break;
-
-            case Robot_State::MOVE_BACKWARD:
-                //ESP_LOGI(TAG, "Current movement is BACKWARD. Using Back Ultrasonic Sensor.");
-                o_avoid->config.back_sensor->measure_distance();
-                current_distance = o_avoid->config.back_sensor->distance;
-                stopped_recently = true;
-                break;
-
-            case Robot_State::TURN_LEFT:
-                //ESP_LOGI(TAG, "Current movement is LEFT. Using Left Ultrasonic Sensor.");
-                o_avoid->config.left_sensor->measure_distance();
-                current_distance = o_avoid->config.left_sensor->distance;
-                stopped_recently = true;
-                break;
-
-            case Robot_State::TURN_RIGHT:
-                //ESP_LOGI(TAG, "Current movement is RIGHT. Using Right Ultrasonic Sensor.");
-                o_avoid->config.right_sensor->measure_distance();
-                current_distance = o_avoid->config.right_sensor->distance;
-                stopped_recently = true;
-                break;
-
-            case Robot_State::BRAKE:
-                if (stopped_recently == true) {
-                    ESP_LOGI(TAG, "Current movement is BRAKE. Not using any Ultrasonic Sensors.");
-                    stopped_recently = false;
-                }
-                break;
-        }
-
-        // Stop the robot from moving if 1 of the ultrasonic sensors detects an object to be close
-        // to the robot.
-        if (current_distance < o_avoid->distance_threshold) {
-            if (stopped_recently == true) {
-                ESP_LOGI(TAG_1, "Obstacle detected at %0.4fmm. Stopping robot.", current_distance);
-            }
-            
-            o_avoid->config.controller->emergency_stop();
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(50));
-    }
-
-    vTaskDelete(NULL);
-    return;
-}
-*/
-//  ============================================================
-
-
-
-/*
-    ============================================================
     Converts C to C++.
     ============================================================
 */
@@ -328,12 +248,6 @@ void app_main(void) {
 
     // Configure the navigation task by passing the robot controller.
     xTaskCreate(Navigation_Task, "Navigation_Task", 4096, &controller, 5, nullptr);
-
-    // Configure the odometry task by passing the drive train.
-    //xTaskCreate(Odometry_Task, "Odometry_Task", 4096, &d_train, 4, nullptr);
-
-    // Configure the obstacle avoidance task by passing the obstacle avoidance config.
-    //xTaskCreate(Obstacle_Avoidance_Task, "Obstacle_Avoidance_Task", 4096, &o_avoid, 5, nullptr);
 
     while (true) {
         vTaskDelay(portMAX_DELAY);

@@ -95,6 +95,7 @@ BaseType_t custom_xQueueSend(QueueHandle_t queue, const void *item, TickType_t t
 BaseType_t custom_xQueueSendToFront(QueueHandle_t queue, const void *item, TickType_t ticks) {
     if (item != nullptr) {
         sent_emergency_command = *(const Robot_Command*)item;
+        sent_command = *(const Robot_Command*)item;
         queue_received_command = true;
         return pdTRUE;
     }
@@ -253,30 +254,45 @@ void test_command_routing(
     ============================================================
     Confirm that that emergency_stop() clears the queue, sends a
     BRAKE command to the front of the queue, and locks out new
-    commands from being sent to the queue.
-
-    NOTE: There is no logic that lifts the lockout, so any
-    commands that are sent after the emergency stop is called
-    will be rejected. We will need to implement a method that
-    lifts the lockout in the future to allow the robot to resume
-    normal operations after an emergency stop.
+    commands from being sent to the queue. Also confirm the
+    queue allows new commands after the lockout expires.
     ============================================================
 */
 void test_emergency_stop(Robot_Controller &r_controller) {
-    r_controller.emergency_stop();
+    // Fast forward time to ensure that any lingering movements are done executing.
+    xTaskGetTickCount_fake.return_val += 10000 / portTICK_PERIOD_MS;
 
+    // Have the robot move forward so that the emergency stop can stop the movement.
+    r_controller.send_command(Robot_State::MOVE_FORWARD, 255, 5000);
+    r_controller.monitor_active_command();
+    r_controller.process_new_command();
+    TEST_ASSERT_EQUAL(Robot_State::MOVE_FORWARD, r_controller.get_robot_state());
+
+    // Now perform the stop and verify that the command went through.
+    r_controller.emergency_stop();
     TEST_ASSERT_EQUAL(1, xQueueReset_fake.call_count);
     TEST_ASSERT_EQUAL(1, xQueueSendToFront_fake.call_count);
     TEST_ASSERT_EQUAL(Robot_State::BRAKE, sent_emergency_command.target_state);
     TEST_ASSERT_EQUAL(0, sent_emergency_command.speed);
     TEST_ASSERT_EQUAL(pdMS_TO_TICKS(10), xQueueSendToFront_fake.arg2_history[0]);
 
-    // Attempt to send a command after the emergency stop.
+    // Attempt to send a command after the emergency stop. The call count should remain the same to
+    // prove that the emergency lockout rejects any command that gets sent to the queue.
     int initial_queue_sends = xQueueSend_fake.call_count;
     r_controller.send_command(Robot_State::MOVE_FORWARD, 255, 1000);
-
-    // The call count should remain the same because the emergency lockout rejected the command from being sent to the queue.
     TEST_ASSERT_EQUAL(initial_queue_sends, xQueueSend_fake.call_count);
+
+    // Simulate 1 loop tick to process the emergency stop command in the queue.
+    r_controller.monitor_active_command();
+    r_controller.process_new_command();
+    TEST_ASSERT_EQUAL(Robot_State::BRAKE, r_controller.get_robot_state());
+
+    // Fast forward time that expires the emergency stop duration to simulate a new command.
+    xTaskGetTickCount_fake.return_val += 2000 / portTICK_PERIOD_MS;
+    r_controller.monitor_active_command();
+    r_controller.process_new_command();
+    r_controller.send_command(Robot_State::MOVE_FORWARD, 255, 1000);
+    TEST_ASSERT_EQUAL(initial_queue_sends + 1, xQueueSend_fake.call_count);
 
     return;
 }

@@ -71,6 +71,7 @@ class Ultrasonic {
         gpio_num_t get_trig_pin();
 
         std::string Ultrasonic_Name;
+        bool is_testing = false;
         
 
     // Set these variables to private to prevent access and modifications from outside the class.

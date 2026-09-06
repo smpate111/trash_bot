@@ -13,14 +13,16 @@ if (IDF_TARGET STREQUAL "linux")
             "sensors/wheel_encoder.cpp"
 
             "test/test_main.cpp"
+
             "test/test_motor_logic.cpp"
             "test/test_motor_driver_logic.cpp"
-            "test/test_ultrasonic_logic.cpp"
+            
             "test/test_wheel_encoder_logic.cpp"
+            "test/test_ultrasonic_logic.cpp"
 
             "test/test_drive_train_logic.cpp"
             "test/test_robot_controller_logic.cpp"
-            #"test/test_obstacle_avoidance_logic.cpp"
+            "test/test_obstacle_avoidance_logic.cpp"
 
         INCLUDE_DIRS
             "."
