@@ -1,6 +1,5 @@
 /*
-    This file defines the Motor class used to control a motor using
-    GPIO pins and PWM signals.
+    This file defines the Motor class used to control a motor using GPIO pins and PWM signals.
 */
 
 #ifndef MOTOR_HPP_
@@ -13,15 +12,13 @@
     Define the class's dependencies.
     ============================================================
 */
+#include <cstdint>
+
 #include <driver/gpio.h>
 #include <driver/ledc.h>
 
-#include <esp_err.h>
 #include <esp_log.h>
 
-#include <iostream>
-#include <math.h>
-#include <stdlib.h>
 #include <string>
 //  ============================================================
 
@@ -46,27 +43,29 @@ struct Motor_Config {
 
 /*
     ============================================================
-    This class manages a motor's speed and direction.
+    This class controls the actuator output and direction of a
+    single motor through GPIO and PWM signals.
     ============================================================
 */
 class Motor {
     // Set these methods to public to allow access and control from outside the class.
     public:
         explicit Motor(const Motor_Config &motor_setup);
-        
-        virtual ~Motor() = default;
+        ~Motor() = default;
+        bool is_initialized() const;
 
-        virtual void set_speed(uint32_t speed);
-        uint32_t get_speed();
+        void set_duty_cycle(uint8_t duty);
+        uint8_t get_duty_cycle() const;
 
-        virtual void spin_forward();
-        virtual void spin_backward();
-        virtual void stop();
+        void spin_forward();
+        void spin_backward();
+        void stop();
 
     // Set these variables to private to prevent access and modifications from outside the class.
     private:
-        Motor_Config config;
-        uint32_t Current_Speed = 0;
+        const Motor_Config config;
+        bool initialized = false;
+        uint8_t current_duty = 0;
 };
 //  ============================================================
 

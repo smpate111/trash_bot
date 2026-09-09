@@ -16,15 +16,15 @@
 #include <stdio.h>
 #include <string>
 
-#include <../include/controllers/drive_train.hpp>
-#include <../include/controllers/robot_controller.hpp>
-#include <../include/controllers/obstacle_avoidance.hpp>
+//#include <../include/controllers/drive_train.hpp>
+//#include <../include/controllers/robot_controller.hpp>
+//#include <../include/controllers/obstacle_avoidance.hpp>
 
 #include <../include/motors/motor.hpp>
-#include <../include/motors/motor_driver.hpp>
+//#include <../include/motors/motor_driver.hpp>
 
-#include <../include/sensors/wheel_encoder.hpp>
-#include <../include/sensors/ultrasonic.hpp>
+//#include <../include/sensors/wheel_encoder.hpp>
+//#include <../include/sensors/ultrasonic.hpp>
 //  ============================================================
 
 
@@ -36,6 +36,7 @@
     ways.
     ============================================================
 */
+/*
 void Navigation_Task(void *arg) {
     Robot_Controller *controller = static_cast<Robot_Controller*>(arg);
     //vTaskDelay(pdMS_TO_TICKS(2000));
@@ -61,6 +62,7 @@ void Navigation_Task(void *arg) {
     vTaskDelete(NULL);
     return;
 }
+*/
 //  ============================================================
 
 
@@ -110,29 +112,10 @@ void app_main(void) {
 
 
     // Configure the motors by defining their pins and channels.
-    Motor_Config fl_config = {
-        "Front Left Motor",
-        GPIO_NUM_11, GPIO_NUM_12,
-        LEDC_CHANNEL_0, LEDC_CHANNEL_1
-    };
-
-    Motor_Config fr_config = {
-        "Front Right Motor",
-        GPIO_NUM_13, GPIO_NUM_14,
-        LEDC_CHANNEL_2, LEDC_CHANNEL_3
-    };
-
-    Motor_Config bl_config = {
-        "Back Left Motor",
-        GPIO_NUM_6, GPIO_NUM_7,
-        LEDC_CHANNEL_5, LEDC_CHANNEL_4
-    };
-
-    Motor_Config br_config = {
-        "Back Right Motor",
-        GPIO_NUM_15, GPIO_NUM_16,
-        LEDC_CHANNEL_7, LEDC_CHANNEL_6
-    };
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config bl_config = {"Back Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config br_config = {"Back Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
 
     // Initialize the motors.
     Motor fl_motor(fl_config);
@@ -140,8 +123,86 @@ void app_main(void) {
     Motor bl_motor(bl_config);
     Motor br_motor(br_config);
 
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    fl_motor.set_duty_cycle(255);
+    fr_motor.set_duty_cycle(255);
+    bl_motor.set_duty_cycle(255);
+    br_motor.set_duty_cycle(255);
+
+    fl_motor.spin_forward();
+    fr_motor.spin_forward();
+    bl_motor.spin_forward();
+    br_motor.spin_forward();
+
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    fl_motor.stop();
+    fr_motor.stop();
+    bl_motor.stop();
+    br_motor.stop();
+
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    fl_motor.set_duty_cycle(215);
+    fr_motor.set_duty_cycle(215);
+    bl_motor.set_duty_cycle(215);
+    br_motor.set_duty_cycle(215);
+
+    fl_motor.spin_backward();
+    fr_motor.spin_backward();
+    bl_motor.spin_backward();
+    br_motor.spin_backward();
+
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    fl_motor.stop();
+    fr_motor.stop();
+    bl_motor.stop();
+    br_motor.stop();
+
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    fl_motor.set_duty_cycle(190);
+    fr_motor.set_duty_cycle(190);
+    bl_motor.set_duty_cycle(190);
+    br_motor.set_duty_cycle(190);
+
+    fl_motor.spin_backward();
+    fr_motor.spin_forward();
+    bl_motor.spin_backward();
+    br_motor.spin_forward();
+
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    fl_motor.stop();
+    fr_motor.stop();
+    bl_motor.stop();
+    br_motor.stop();
+
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    fl_motor.set_duty_cycle(155);
+    fr_motor.set_duty_cycle(155);
+    bl_motor.set_duty_cycle(155);
+    br_motor.set_duty_cycle(155);
+
+    fl_motor.spin_forward();
+    fr_motor.spin_backward();
+    bl_motor.spin_forward();
+    br_motor.spin_backward();
+
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    fl_motor.stop();
+    fr_motor.stop();
+    bl_motor.stop();
+    br_motor.stop();
+
+    vTaskDelay(pdMS_TO_TICKS(2000));
 
 
+    /*
     // Configure the motor drivers by defining which motors they are going to control.
     Driver_Config fd_config = {
         "Front Driver",
@@ -252,5 +313,6 @@ void app_main(void) {
     while (true) {
         vTaskDelay(portMAX_DELAY);
     }
+    */
 }
 //  ============================================================

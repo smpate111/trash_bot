@@ -6,18 +6,18 @@
 
 ## 1. Purpose
 
-`Motor` represents and controls a singular bidirectional DC motor connected through a motor driver. This components translates a requested motor command into the electrical outputs required by the motor driver. It is intended to provide a simple interface for higher-level components (e.g., motor driver and drive train) to manage and control.
+`Motor` represents and controls a single bidirectional DC motor connected through a motor driver. It provides a low-level interface that allows higher-level components, such as the motor driver and drive train, to command the motor without directly interactive with its GPIO and PWM configurations.
 
 ## 2. Responsibilities:
 
 `Motor` is responsible for:
-1. Configuring the GPIO/PWM resources required to control one motor.
+1. Configure the GPIO/PWM resources required to control one motor.
 2. Maintain the motor's commanded actuation state.
-3. Apply the requested motor speed.
+3. Apply the requested motor PWM duty.
 4. Drive the motor in the forward/backward direction.
 5. Stop the motor.
 6. Maintain a safe initial actuator state.
-7. Prevent invalid actuator commands from producing an invalid hardware state.
+7. Apply only valid actuator commands represented by the `Motor` interface.
 
 ## 3. Not responsible for:
 
@@ -42,75 +42,66 @@ This component currently accepts a motor configuration that contains:
 2. Direction-controlling GPIO pins
 3. PWM channels
 
-It also accepts a user-defined output value through `set_speed()`.
-
-**Decision:** TBD.
+It also accepts a user-defined output value through `set_duty_cycle()` using `uint8_t` to represent the valid duty cycle range of `0-255`.
 
 ## 5. Outputs
 
-The component produces electrical actuator signals through:
+`Motor` produces electrical actuator signals through:
 1. Direction/control outputs
-2. PWM duty-cycle outputs
+2. PWM duty cycle outputs
 
-The component may also expose the current commanded actuator state to software.
+`Motor` exposes the current commanded PWM duty cycle through `get_duty_cycle()`.
 
 ## 6. Initial State
 
-A newly created `Motor` should enter a safe state before normal operation during its object construction.
+A newly created `Motor` must initialize its actuator to a safe state before normal operation during construction.
 
 The expected initial actuator state is:
-1. No motor rotation commanded.
-2. PWM duty = 0.
-3. Both direction outputs represent the stopped state.
+1. PWM duty = 0.
+2. Both control paths receive zero duty cycles.
 
 ## 7. Valid Inputs
 
-This component must define the valid range for its actuator command.
+`Motor::set_duty_cycle()` accepts an `uint8_t` PWM duty cycle value. Valid duty cycle values are:
+- `0-255` inclusive.
 
-Questions to resolve:
-- What is the valid PWM range?
-- Is the maximum determined by the LEDC configuration?
-- Should `Motor` reject or clamp values above the maximum?
-- Should invalid input be reported to the caller?
-
-**Decision:** TBD.
+The `Motor` interface only represents valid actuator duty cycle values. Higher-level components that calculate duty values are the ones responsible for validating and constraining those values before converting them to `uint8_t`.
 
 ## 8. Invariants
 
 The following conditions should always hold:
 
 ### A. Valid actuator output
-`Motor` must never intentionally command a PWM value outside the supported hardware range.
+`Motor` accepts only a PWM duty cycle representation within the supported hardware range of `0-255`.
 
 ### B. Forward direction
-A forward command must only output the configured forward control path.
+A forward command must apply the commanded duty cycle to the forward control path and zero duty cycle to the reverse control path.
 
 ### C. Backward direction
-A backward command must only output the configured backward control path.
+A backward command must apply the commanded duty cycle to the reverse control path and zero duty cycle to the forward control path.
 
 ### D. Stop state
-A stopped motor must command zero output.
+A stopped command must apply a commanded zero duty cycle to both control paths.
 
 ### E. Safe initialization
-`Motor` must not begin operation with a non-zero commanded output.
+`Motor` must initialize with zero PWM duty on both control paths.
 
 ### F. State meaning
-The internally stored motor value represents the commanded actuator output and not measured physical motor velocity.
+The internally stored duty cycle value represents the commanded actuator output and not a measured physical motor velocity.
+
+### G. Exclusive movement
+`Motor` must never command non-zero duty on both directional control paths simultaneously.
 
 ## 9. Failure Modes
 Potential failure modes include:
-- Invalid GPIO configuration
-- Conflicting PWM channels
-- Invalid PWM configuration
-- Hardware configuration API failure
-- Invalid speed/output request
-- Unexpected direction transitions
-- Hardware becoming unavailable after initialization
-- Software reporting one state while hardware is actually in another state
+- Invalid GPIO configuration.
+- Conflicting PWM channels.
+- Invalid PWM configuration.
+- Hardware configuration API failure.
+- Invalid duty cycle command by an upstream component before its conversion to `uint8_t`.
+- Unexpected direction transitions or invalid control path state.
 
 Each failure mode should eventually have a defined behavior.
-
-**Decision:** TBD.
 
 ## 10. Error Handling
 The component currently calls the ESP-IDF configuration and actuator APIs directly.
@@ -125,7 +116,7 @@ The design needs to determine:
 **Decision:** TBD.
 
 ## 11. Timing Requirements
-The component must eventual document whether its public operations are:
+The component must eventually document whether its public operations are:
 - Blocking or non-blocking
 - Safe to call from an RTOS task
 - Safe to call from an ISR
@@ -146,15 +137,13 @@ The implementation should account for:
 
 No optimization decision should be made without first identifying a relevant constraint or measurement.
 
-**Decision:** TBD.
-
 ## 13. Test Requirements
 `Motor` should be testable independently of the physical robot. At minimum, tests should cover:
 
 ### Normal behavior
 - Initial state
-- Set valid speed
-- Get commanded speed
+- Set valid duty cycle
+- Get commanded duty cycle
 - Forward operation
 - Backward operation
 - Stop operation
@@ -163,27 +152,36 @@ No optimization decision should be made without first identifying a relevant con
 - Minimum valid output
 - Maximum valid output
 - Zero output
-- Values immediately outside the valid range
 
 ### State transitions
-- Forward -> Backward
-- Backward -> Forward
-- Forward -> Stop
-- Backward -> Stop
-- Repeated Stop
-- Repeated direction commands
+- `Forward -> Forward`
+- `Forward -> Backward`
+- `Forward -> Stop`
+- `Backward -> Forward`
+- `Backward -> Backward`
+- `Backward -> Stop`
+- `Stop -> Forward`
+- `Stop -> Backward`
+- `Stop -> Stop`
+
+### Direction switch maintains exclusivity
+- `Forward @ 200:`
+    - `-> Backward @ 200`
+    - `Verify channel 1 = 0`
+    - `Verify channel 2 = 200`
+- `Backward @ 200:`
+    - `-> Forward @ 200`
+    - `Verify channel 1 = 200`
+    - `Verify channel 2 = 0`
 
 ### Fault behavior
 - Invalid configuration
-- Invalid actuator command
 - Hardware API failure
 
 ### Safety behavior
-- Motor intializes stopped
-- Invalid input cannot create an unsafe actuator state
-- Stop produces the expected electrical output
-
-**Decision:** TBD.
+- Motor intializes in a stopped state.
+- Invalid input cannot create an unsafe actuator state.
+- Stop produces the expected electrical output.
 
 ## 14. Design Goals
 `Motor` should prioritize:
@@ -193,26 +191,22 @@ No optimization decision should be made without first identifying a relevant con
 4. Testability
 5. Minimal unnecessary complexity
 6. Efficient use of embedded resources
-7. A small and understandable public interface.
+7. A small and understandable public interface
 
 The design should prefer simplicity unless additional abstraction provides a concrete engineering benefit.
 
 ## 15. Current Implementation Review
 The current implementation provides:
-- A motor configuration struct during construction.
-- GPIO configuration and LEDC PWM configuration during construction.
-- Stored commanded speed.
-- Forward/backward/stop operations.
-- Logging through ESP-IDF.
+- `Motor_Config` struct for GPIO and LEDC channel configuration.
+- GPIO and LEDC PWM channel initialization during construction.
+- A stored `uint8_t` PWM duty cycle value.
+- Forward, backward, and stop commands.
+- A `const` duty cycle getter.
+- ESP-IDF logging.
 
-Areas requiring design investigation before refactoring:
-- Meaning and naming of `speed`.
-- Valid actuator range.
-- Error handling for ESP-IDF calls.
-- Necessity of `virtual` functions.
-- Constructor responsibilities.
-- Header dependencies.
-- Ownership and lifetime of configuration data.
-- Logging responsibility.
-- Public API surface.
-- Separation between actuator command and measured physical behavior.
+Known design areas still required:
+- Hardware API error handling.
+- Global GPIO/LEDC resource conflict detection.
+- Configuration immutability.
+- Logging metadata ownership.
+- Timing guarantees.

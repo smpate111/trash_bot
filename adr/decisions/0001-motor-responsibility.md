@@ -6,7 +6,7 @@ Decide what the motor component should be responsible for in the system architec
 
 ## Options
 
-1. Create a `Motor` class that owns its own hardware configurations (e.g., GPIO pins, PWM channels) and functions.
+1. Create a `Motor` class that owns its own hardware configurations (e.g., GPIO pins, PWM channels).
 2. Manage the hardware configurations directly through a higher-level controller.
 
 ## Decision
@@ -19,4 +19,4 @@ The rest of the system does not need to know the GPIO pins or PWM channels the m
 
 ## Consequences
 
-This makes it easier to create mock hardware to test because I can independently verify the logic without relying on higher-level controls. However, there will be a bigger memory footprint due to maintaining multiple class instances on the stack/heap.
+This makes it easier to create mock hardware to test because I can independently verify the logic without relying on higher-level controls. Each `Motor` instance maintains its own configuration and state. This introduces per-instance storage, but the cost is accepted in exchange for clearer ownership and encapsulation.

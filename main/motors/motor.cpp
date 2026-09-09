@@ -8,7 +8,7 @@
     methods and variables.
     ============================================================
 */
-#include <../include/motors/motor.hpp>
+#include "motors/motor.hpp"
 //  ============================================================
 
 
@@ -16,16 +16,34 @@
 /*
     ============================================================
     Constructor for the Motor class that initializes the motor
-    with user-defined values and configures the timer and
-    channels.
+    with user-defined values to configure the LEDC channels.
     ============================================================
 */
 Motor::Motor(const Motor_Config &motor_setup) : config(motor_setup) {
     // Configure the pins to be output pins.
-    gpio_reset_pin(config.in1_pin);
-    gpio_reset_pin(config.in2_pin);
-    gpio_set_direction(config.in1_pin, GPIO_MODE_OUTPUT);
-    gpio_set_direction(config.in2_pin, GPIO_MODE_OUTPUT);
+    esp_err_t err = gpio_reset_pin(config.in1_pin);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to reset GPIO Pin [%d].", config.in1_pin);
+        return;
+    }
+
+    err = gpio_reset_pin(config.in2_pin);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to reset GPIO Pin [%d].", config.in2_pin);
+        return;
+    }
+
+    err = gpio_set_direction(config.in1_pin, GPIO_MODE_OUTPUT);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to configure GPIO Pin [%d] as output.", config.in1_pin);
+        return;
+    }
+
+    err = gpio_set_direction(config.in2_pin, GPIO_MODE_OUTPUT);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to configure GPIO Pin [%d] as output.", config.in2_pin);
+        return;
+    }
 
     
     // Configure the channel for the IN1 pin.
@@ -37,7 +55,11 @@ Motor::Motor(const Motor_Config &motor_setup) : config(motor_setup) {
     channel_1_config.duty = 0;                          // Configure the initial duty cycle to 0.
     channel_1_config.hpoint = 0;                        // Set the signal to pull high at the start of each timer cycle.
 
-    ledc_channel_config(&channel_1_config);
+    err = ledc_channel_config(&channel_1_config);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to configure motor LEDC channel [1].");
+        return;
+    }
 
 
     // Configure the channel for the IN2 pin.
@@ -49,21 +71,48 @@ Motor::Motor(const Motor_Config &motor_setup) : config(motor_setup) {
     channel_2_config.duty = 0;                          // Configure the initial duty cycle to 0.
     channel_2_config.hpoint = 0;                        // Set the signal to pull high at the start of each timer cycle.
 
-    ledc_channel_config(&channel_2_config);
+    err = ledc_channel_config(&channel_2_config);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to configure motor LEDC channel [2].");
+        return;
+    }
 
-    ESP_LOGI(config.name.c_str(), "Initialized motor on pins %d and %d.", config.in1_pin, config.in2_pin);
+    ESP_LOGI(config.name.c_str(), "Initialized motor on GPIO Pins [%d] and [%d].", config.in1_pin, config.in2_pin);
+    initialized = true;
 }
 //  ============================================================
 
 
 /*
     ============================================================
-    Record the motor's speed between 0 to 255.
+    Retrieves the initialized boolean.
     ============================================================
 */
-void Motor::set_speed(uint32_t speed) {
-    Current_Speed = speed;
-    ESP_LOGI(config.name.c_str(), "Adjusting motor speed to: %lu.", Current_Speed);
+bool Motor::is_initialized() const {
+    return initialized;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Record the motor's PWM output between 0 to 255.
+
+    NOTE: Callers must validate or limit the calculated duty
+    value before converting it to uint8_t. An out-of-range
+    integer converted to uint8_t is narrowed to the destination
+    type rather than being rejected automatically, which could
+    result in unintended motor command.
+    ============================================================
+*/
+void Motor::set_duty_cycle(uint8_t duty) {
+    if (initialized == false) {
+        ESP_LOGW(config.name.c_str(), "Motor is not initialized. Ignoring set_duty_cycle().");
+        return;
+    }
+
+    current_duty = duty;
+    ESP_LOGI(config.name.c_str(), "Adjusted motor's PWM output to: [%u].", current_duty);
     return;
 }
 //  ============================================================
@@ -71,28 +120,34 @@ void Motor::set_speed(uint32_t speed) {
 
 /*
     ============================================================
-    Retrieve the motor's speed.
+    Retrieve the motor's PWM output.
     ============================================================
 */
-uint32_t Motor::get_speed() {
-    return Current_Speed;
+uint8_t Motor::get_duty_cycle() const {
+    return current_duty;
 }
 //  ============================================================
 
 
 /*
     ============================================================
-    Spins the motor clockwise by setting the IN1 pin to
-    HIGH and the IN2 pin to LOW.
+    Commands the motor to perform a forward rotation by applying
+    the current duty cycle to channel 1 and a zero duty cycle to
+    channel 2.
     ============================================================
 */
 void Motor::spin_forward() {
-    ESP_LOGI(config.name.c_str(), "Spinning motor forward at speed: %lu.", get_speed());
+    if (initialized == false) {
+        ESP_LOGW(config.name.c_str(), "Motor is not initialized. Ignoring spin_forward().");
+        return;
+    }
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, get_speed());
+    ESP_LOGI(config.name.c_str(), "Spinning motor forward at PWM output: [%u].", current_duty);
+
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, current_duty);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_1);
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, 0.0);
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, 0);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_2);
     return;
 }
@@ -101,17 +156,23 @@ void Motor::spin_forward() {
 
 /*
     ============================================================
-    Spins the motor counter-clockwise by setting the IN1 pin
-    to LOW and the IN2 pin to HIGH.
+    Commands the motor to perform a backward rotation by
+    applying a zero duty cycle to channel 1 and the current duty
+    cycle to channel 2.
     ============================================================
 */
 void Motor::spin_backward() {
-    ESP_LOGI(config.name.c_str(), "Spinning motor backward at speed: %lu.", get_speed());
+    if (initialized == false) {
+        ESP_LOGW(config.name.c_str(), "Motor is not initialized. Ignoring spin_backward().");
+        return;
+    }
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, 0.0);
+    ESP_LOGI(config.name.c_str(), "Spinning motor backward at PWM output: [%u].", current_duty);
+
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, 0);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_1);
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, get_speed());
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, current_duty);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_2);
     return;
 }
@@ -120,19 +181,25 @@ void Motor::spin_backward() {
 
 /*
     ============================================================
-    Stops the motor from spinning by setting both the
-    IN1 and IN2 pins to LOW.
+    Commands the motor to perform no rotational movement by
+    applying a zero duty cycle to the current duty cycle and to
+    channels 1 and 2.
     ============================================================
 */
 void Motor::stop() {
+    if (initialized == false) {
+        ESP_LOGW(config.name.c_str(), "Motor is not initialized. Ignoring stop().");
+        return;
+    }
+
     ESP_LOGI(config.name.c_str(), "Stopping motor from spinning.");
 
-    set_speed(0.0);
+    set_duty_cycle(0);
     
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, get_speed());
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, current_duty);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_1);
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, get_speed());
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, current_duty);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_2);
 
     return;
