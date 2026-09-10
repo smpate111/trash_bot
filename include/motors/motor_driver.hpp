@@ -12,7 +12,16 @@
     Define the class's dependencies.
     ============================================================
 */
-#include <../include/motors/motor.hpp>
+#include "motors/motor.hpp"
+
+#include <cstdint>
+
+#include <driver/gpio.h>
+#include <driver/ledc.h>
+
+#include <esp_log.h>
+
+#include <string>
 //  ============================================================
 
 
@@ -34,26 +43,35 @@ struct Driver_Config {
 
 /*
     ============================================================
-    This class manages 2 motors' speed and direction.
+    This class controls the actuator output and direction of 2
+    motors through GPIO and PWM signals.
     ============================================================
 */
 class Motor_Driver {
     // Set these methods to public to allow access and control from outside the class.
     public:
         explicit Motor_Driver(const Driver_Config &driver_setup);
-        
-        virtual ~Motor_Driver() = default;
+        ~Motor_Driver() = default;
+        bool is_initialized() const;
 
-        virtual void adjust_speed(uint32_t left_speed, uint32_t right_speed);
-        virtual void forward();
-        virtual void backward();
-        virtual void left();
-        virtual void right();
-        virtual void brake();
+        void set_left_duty_cycle(uint8_t left_duty);
+        uint8_t get_left_duty_cycle() const;
+
+        void set_right_duty_cycle(uint8_t right_duty);
+        uint8_t get_right_duty_cycle() const;
+
+        void forward();
+        void backward();
+        void left_turn();
+        void right_turn();
+        void stop();
 
     // Set these variables to private to prevent access and modifications from outside the class.
     private:
         Driver_Config config;
+        bool initialized = false;
+        uint8_t current_left_duty = 0;
+        uint8_t current_right_duty = 0;
 };
 //  ============================================================
 

@@ -6,9 +6,9 @@
 
 ## 1. Purpose
 
-`Motor` represents and controls a single bidirectional DC motor connected through a motor driver. It provides a low-level interface that allows higher-level components, such as the motor driver and drive train, to command the motor without directly interactive with its GPIO and PWM configurations.
+`Motor` represents and controls a single bidirectional DC motor connected through a motor driver. It provides a low-level interface that allows higher-level components, such as the motor driver and drive train, to command the motor without directly interacting with its GPIO and PWM configurations.
 
-## 2. Responsibilities:
+## 2. Responsibilities
 
 `Motor` is responsible for:
 1. Configure the GPIO/PWM resources required to control one motor.
@@ -19,7 +19,7 @@
 6. Maintain a safe initial actuator state.
 7. Apply only valid actuator commands represented by the `Motor` interface.
 
-## 3. Not responsible for:
+## 3. Not responsible for
 
 `Motor` is not responsible for:
 1. Determining where the robot should move.
@@ -54,7 +54,7 @@ It also accepts a user-defined output value through `set_duty_cycle()` using `ui
 
 ## 6. Initial State
 
-A newly created `Motor` must initialize its actuator to a safe state before normal operation during construction.
+A newly created `Motor` must initialize its actuator to a safe state during its construction and before performing normal operation.
 
 The expected initial actuator state is:
 1. PWM duty = 0.
@@ -113,8 +113,6 @@ The design needs to determine:
 - How initialization failure is communicated.
 - How runtime actuator failure is communicated.
 
-**Decision:** TBD.
-
 ## 11. Timing Requirements
 The component must eventually document whether its public operations are:
 - Blocking or non-blocking
@@ -123,8 +121,6 @@ The component must eventually document whether its public operations are:
 - Expected to complete within a bounded time
 
 Current implementation does not have these formally specified.
-
-**Decision:** TBD.
 
 ## 12. Resource Constraints
 The implementation should account for:
@@ -140,7 +136,7 @@ No optimization decision should be made without first identifying a relevant con
 ## 13. Test Requirements
 `Motor` should be testable independently of the physical robot. At minimum, tests should cover:
 
-### Normal behavior
+### A. Normal behavior
 - Initial state
 - Set valid duty cycle
 - Get commanded duty cycle
@@ -148,12 +144,12 @@ No optimization decision should be made without first identifying a relevant con
 - Backward operation
 - Stop operation
 
-### Boundary behavior
+### B. Boundary behavior
 - Minimum valid output
 - Maximum valid output
 - Zero output
 
-### State transitions
+### C. State transitions
 - `Forward -> Forward`
 - `Forward -> Backward`
 - `Forward -> Stop`
@@ -164,7 +160,7 @@ No optimization decision should be made without first identifying a relevant con
 - `Stop -> Backward`
 - `Stop -> Stop`
 
-### Direction switch maintains exclusivity
+### D. Direction switch maintains exclusivity
 - `Forward @ 200:`
     - `-> Backward @ 200`
     - `Verify channel 1 = 0`
@@ -174,12 +170,12 @@ No optimization decision should be made without first identifying a relevant con
     - `Verify channel 1 = 200`
     - `Verify channel 2 = 0`
 
-### Fault behavior
+### E. Fault behavior
 - Invalid configuration
 - Hardware API failure
 
-### Safety behavior
-- Motor intializes in a stopped state.
+### F. Safety behavior
+- `Motor` intializes in a stopped state.
 - Invalid input cannot create an unsafe actuator state.
 - Stop produces the expected electrical output.
 
@@ -203,9 +199,9 @@ The current implementation provides:
 - Forward, backward, and stop commands.
 - A `const` duty cycle getter.
 - ESP-IDF logging.
+- Hardware API error handling.
 
 Known design areas still required:
-- Hardware API error handling.
 - Global GPIO/LEDC resource conflict detection.
 - Configuration immutability.
 - Logging metadata ownership.

@@ -14,7 +14,7 @@
 #include <test/mock_libraries/mock_hardware.hpp>
 
 #include <test/test_motor_logic.cpp>
-//#include <test/test_motor_driver_logic.cpp>
+#include <test/test_motor_driver_logic.cpp>
 //#include <test/test_wheel_encoder_logic.cpp>
 //#include <test/test_ultrasonic_logic.cpp>
 
@@ -143,9 +143,51 @@ extern "C" void app_main(void) {
     RUN_TEST(test_motor_stop_to_backward);
     RUN_TEST(test_motor_stop_to_stop);
 
+    // Test the motor driver component.
+    RUN_TEST(test_motor_driver_hardware_initialization);
+    RUN_TEST(test_motor_driver_initialization_left_motor_failure);
+    RUN_TEST(test_motor_driver_initialization_right_motor_failure);
+    RUN_TEST(test_motor_driver_commands_lockout_after_initialization);
+
+    RUN_TEST(test_motor_driver_set_duty_cycles);
+
+    RUN_TEST(test_motor_driver_forward);
+    RUN_TEST(test_motor_driver_backward);
+    RUN_TEST(test_motor_driver_left_turn);
+    RUN_TEST(test_motor_driver_right_turn);
+    RUN_TEST(test_motor_driver_stop);
+
+    RUN_TEST(test_motor_driver_forward_to_forward);
+    RUN_TEST(test_motor_driver_forward_to_backward);
+    RUN_TEST(test_motor_driver_forward_to_left_turn);
+    RUN_TEST(test_motor_driver_forward_to_right_turn);
+    RUN_TEST(test_motor_driver_forward_to_stop);
+
+    RUN_TEST(test_motor_driver_backward_to_forward);
+    RUN_TEST(test_motor_driver_backward_to_backward);
+    RUN_TEST(test_motor_driver_backward_to_left_turn);
+    RUN_TEST(test_motor_driver_backward_to_right_turn);
+    RUN_TEST(test_motor_driver_backward_to_stop);
+
+    RUN_TEST(test_motor_driver_left_turn_to_forward);
+    RUN_TEST(test_motor_driver_left_turn_to_backward);
+    RUN_TEST(test_motor_driver_left_turn_to_left_turn);
+    RUN_TEST(test_motor_driver_left_turn_to_right_turn);
+    RUN_TEST(test_motor_driver_left_turn_to_stop);
+
+    RUN_TEST(test_motor_driver_right_turn_to_forward);
+    RUN_TEST(test_motor_driver_right_turn_to_backward);
+    RUN_TEST(test_motor_driver_right_turn_to_left_turn);
+    RUN_TEST(test_motor_driver_right_turn_to_right_turn);
+    RUN_TEST(test_motor_driver_right_turn_to_stop);
+
+    RUN_TEST(test_motor_driver_stop_to_forward);
+    RUN_TEST(test_motor_driver_stop_to_backward);
+    RUN_TEST(test_motor_driver_stop_to_left_turn);
+    RUN_TEST(test_motor_driver_stop_to_right_turn);
+    RUN_TEST(test_motor_driver_stop_to_stop);
+
     // Test the components.
-    //RUN_TEST(test_motor_functions);
-    //RUN_TEST(test_motor_driver_functions);
     //RUN_TEST(test_wheel_encoder_functions);
     //RUN_TEST(test_ultrasonic_functions);
 

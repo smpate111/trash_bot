@@ -19,4 +19,4 @@ This better organizes the `Motor` class because I can separate the hardware conf
 
 ## Consequences
 
-The configuration remains grouped as a distinct type and is stored as a private member of `Motor`, which imporves ownership and readability at the cost of exposing less direct access to the configuration.
+The configuration remains grouped as a distinct type and is stored as a private member of `Motor`, which improves ownership and readability at the cost of exposing less direct access to the configuration.

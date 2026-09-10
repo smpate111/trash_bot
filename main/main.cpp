@@ -20,8 +20,8 @@
 //#include <../include/controllers/robot_controller.hpp>
 //#include <../include/controllers/obstacle_avoidance.hpp>
 
-#include <../include/motors/motor.hpp>
-//#include <../include/motors/motor_driver.hpp>
+#include "motors/motor.hpp"
+#include "motors/motor_driver.hpp"
 
 //#include <../include/sensors/wheel_encoder.hpp>
 //#include <../include/sensors/ultrasonic.hpp>
@@ -123,81 +123,73 @@ void app_main(void) {
     Motor bl_motor(bl_config);
     Motor br_motor(br_config);
 
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    // Configure the motor drivers
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config bmd_config = {"Back Motor Driver", bl_motor, br_motor};
 
-    fl_motor.set_duty_cycle(255);
-    fr_motor.set_duty_cycle(255);
-    bl_motor.set_duty_cycle(255);
-    br_motor.set_duty_cycle(255);
-
-    fl_motor.spin_forward();
-    fr_motor.spin_forward();
-    bl_motor.spin_forward();
-    br_motor.spin_forward();
+    // Initialize the motor drivers.
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver bm_driver(bmd_config);
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    fl_motor.stop();
-    fr_motor.stop();
-    bl_motor.stop();
-    br_motor.stop();
+    fm_driver.set_left_duty_cycle(255);
+    fm_driver.set_right_duty_cycle(255);
+    bm_driver.set_left_duty_cycle(255);
+    bm_driver.set_right_duty_cycle(255);
+
+    fm_driver.forward();
+    bm_driver.forward();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    fl_motor.set_duty_cycle(215);
-    fr_motor.set_duty_cycle(215);
-    bl_motor.set_duty_cycle(215);
-    br_motor.set_duty_cycle(215);
-
-    fl_motor.spin_backward();
-    fr_motor.spin_backward();
-    bl_motor.spin_backward();
-    br_motor.spin_backward();
+    fm_driver.stop();
+    bm_driver.stop();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    fl_motor.stop();
-    fr_motor.stop();
-    bl_motor.stop();
-    br_motor.stop();
+    fm_driver.set_left_duty_cycle(215);
+    fm_driver.set_right_duty_cycle(215);
+    bm_driver.set_left_duty_cycle(215);
+    bm_driver.set_right_duty_cycle(215);
+
+    fm_driver.backward();
+    bm_driver.backward();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    fl_motor.set_duty_cycle(190);
-    fr_motor.set_duty_cycle(190);
-    bl_motor.set_duty_cycle(190);
-    br_motor.set_duty_cycle(190);
-
-    fl_motor.spin_backward();
-    fr_motor.spin_forward();
-    bl_motor.spin_backward();
-    br_motor.spin_forward();
+    fm_driver.stop();
+    bm_driver.stop();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    fl_motor.stop();
-    fr_motor.stop();
-    bl_motor.stop();
-    br_motor.stop();
+    fm_driver.set_left_duty_cycle(190);
+    fm_driver.set_right_duty_cycle(190);
+    bm_driver.set_left_duty_cycle(190);
+    bm_driver.set_right_duty_cycle(190);
+
+    fm_driver.left_turn();
+    bm_driver.left_turn();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    fl_motor.set_duty_cycle(155);
-    fr_motor.set_duty_cycle(155);
-    bl_motor.set_duty_cycle(155);
-    br_motor.set_duty_cycle(155);
-
-    fl_motor.spin_forward();
-    fr_motor.spin_backward();
-    bl_motor.spin_forward();
-    br_motor.spin_backward();
+    fm_driver.stop();
+    bm_driver.stop();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    fl_motor.stop();
-    fr_motor.stop();
-    bl_motor.stop();
-    br_motor.stop();
+    fm_driver.set_left_duty_cycle(155);
+    fm_driver.set_right_duty_cycle(155);
+    bm_driver.set_left_duty_cycle(155);
+    bm_driver.set_right_duty_cycle(155);
+
+    fm_driver.right_turn();
+    bm_driver.right_turn();
+
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    fm_driver.stop();
+    bm_driver.stop();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 

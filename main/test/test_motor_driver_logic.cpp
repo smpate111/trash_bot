@@ -22,219 +22,2595 @@
 
 /*
     ============================================================
-    Test the motor driver class and its functions.
+    Test that the Motor_Driver's constructor initializes
+    correctly.
     ============================================================
 */
-void test_motor_driver_functions(void) {
+void test_motor_driver_hardware_initialization(void) {
     // Create the motor objects.
     Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
     Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
-
     Motor l_motor(l_config);
     Motor r_motor(r_config);
 
-    // Create the motor driver object.
-    Driver_Config config = {"Driver", l_motor, r_motor};
-    Motor_Driver driver(config);
+    TEST_ASSERT_TRUE(l_motor.is_initialized());
+    TEST_ASSERT_TRUE(r_motor.is_initialized());
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+
+    TEST_ASSERT_TRUE(driver.is_initialized());
+    return;
+}
+//  ============================================================
 
 
-    /*
-        ============================================================
-        Test 1: Verify the hardware initialization of the motor
-        driver.
-        ============================================================
-    */
 
-    // Confirm the GPIO pins were reset.
+/*
+    ============================================================
+    Test that the Motor_Driver's constructor fails
+    initialization when initializing the Left Motor.
+    ============================================================
+*/
+void test_motor_driver_initialization_left_motor_failure(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor r_motor(r_config);
+
+    gpio_reset_pin_fake.return_val = ESP_FAIL;
+    Motor l_motor(l_config);
+
+    TEST_ASSERT_FALSE(l_motor.is_initialized());
+    TEST_ASSERT_TRUE(r_motor.is_initialized());
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+
+    TEST_ASSERT_FALSE(driver.is_initialized());
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the Motor_Driver's constructor fails
+    initialization when initializing the Right Motor.
+    ============================================================
+*/
+void test_motor_driver_initialization_right_motor_failure(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+
+    gpio_set_direction_fake.return_val = ESP_FAIL;
+    Motor r_motor(r_config);
+
+    TEST_ASSERT_TRUE(l_motor.is_initialized());
+    TEST_ASSERT_FALSE(r_motor.is_initialized());
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+
+    TEST_ASSERT_FALSE(driver.is_initialized());
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the Motor_Driver's commands are locked out when
+    the initialization fails.
+    ============================================================
+*/
+void test_motor_driver_commands_lockout_after_initialization(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+
+    ledc_channel_config_fake.return_val = ESP_FAIL;
+    Motor r_motor(r_config);
+
+    TEST_ASSERT_TRUE(l_motor.is_initialized());
+    TEST_ASSERT_FALSE(r_motor.is_initialized());
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+
+    TEST_ASSERT_FALSE(driver.is_initialized());
+
     TEST_ASSERT_EQUAL(4, gpio_reset_pin_fake.call_count);
-    TEST_ASSERT_EQUAL(GPIO_NUM_11, gpio_reset_pin_fake.arg0_history[0]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_12, gpio_reset_pin_fake.arg0_history[1]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_13, gpio_reset_pin_fake.arg0_history[2]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_14, gpio_reset_pin_fake.arg0_history[3]);
-
-    // Confirm the GPIO pins' directions.
     TEST_ASSERT_EQUAL(4, gpio_set_direction_fake.call_count);
-    TEST_ASSERT_EQUAL(GPIO_NUM_11, gpio_set_direction_fake.arg0_history[0]);
-    TEST_ASSERT_EQUAL(GPIO_MODE_OUTPUT, gpio_set_direction_fake.arg1_history[0]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_12, gpio_set_direction_fake.arg0_history[1]);
-    TEST_ASSERT_EQUAL(GPIO_MODE_OUTPUT, gpio_set_direction_fake.arg1_history[1]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_13, gpio_set_direction_fake.arg0_history[2]);
-    TEST_ASSERT_EQUAL(GPIO_MODE_OUTPUT, gpio_set_direction_fake.arg1_history[2]);
-    TEST_ASSERT_EQUAL(GPIO_NUM_14, gpio_set_direction_fake.arg0_history[3]);
-    TEST_ASSERT_EQUAL(GPIO_MODE_OUTPUT, gpio_set_direction_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(3, ledc_channel_config_fake.call_count);
 
-    // Confirm the number of calls for the LEDC config.
-    TEST_ASSERT_EQUAL(4, ledc_channel_config_fake.call_count);
-    //  ============================================================
-    
+    driver.set_left_duty_cycle(100);
+    driver.set_right_duty_cycle(100);
 
-    /*
-        ============================================================
-        Test 2: Check if the fake LEDC hardware is correctly called
-        in forward().
-        ============================================================
-    */
-    driver.adjust_speed(255, 255);
     driver.forward();
-
-    // Confirm the number of calls for the LEDC duty.
-    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
-
-    // Confirm the LEDC duty for the left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[0]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg1_history[0]);       // config.Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[0]);     // Current_Speed
-
-    // Confirm the LEDC duty for the left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[1]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(1, ledc_set_duty_fake.arg1_history[1]);       // config.Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[1]);     // 0.0
-
-    // Confirm the LEDC duty for the right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[2]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(2, ledc_set_duty_fake.arg1_history[2]);       // config.Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[2]);     // Current_Speed
-
-    // Confirm the LEDC duty for the right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[3]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(3, ledc_set_duty_fake.arg1_history[3]);       // config.Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[3]);     // 0.0
-    //  ============================================================
-
-
-    /*
-        ============================================================
-        Test 3: Check if the fake LEDC hardware is correctly called
-        in backward().
-        ============================================================
-    */
-    driver.adjust_speed(200, 200);
     driver.backward();
+    driver.left_turn();
+    driver.right_turn();
+    driver.stop();
 
-    // Confirm the number of calls for the LEDC duty.
-    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
-
-    // Confirm the LEDC duty for the left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[4]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg1_history[4]);       // config.Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[4]);     // 0.0
-
-    // Confirm the LEDC duty for the left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[5]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(1, ledc_set_duty_fake.arg1_history[5]);       // config.Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(200, ledc_set_duty_fake.arg2_history[5]);     // Current_Speed
-
-    // Confirm the LEDC duty for the right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[6]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(2, ledc_set_duty_fake.arg1_history[6]);       // config.Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[6]);     // 0.0
-
-    // Confirm the LEDC duty for the right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[7]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(3, ledc_set_duty_fake.arg1_history[7]);       // config.Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(200, ledc_set_duty_fake.arg2_history[7]);     // Current_Speed
-    //  ============================================================
-
-
-    /*
-        ============================================================
-        Test 4: Check if the fake LEDC hardware is correctly called
-        in left().
-        ============================================================
-    */
-    driver.adjust_speed(150, 150);
-    driver.left();
-
-    // Confirm the number of calls for the LEDC duty.
-    TEST_ASSERT_EQUAL(12, ledc_set_duty_fake.call_count);
-
-    // Confirm the LEDC duty for the left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[8]);        // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg1_history[8]);        // config.Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[8]);      // 0.0
-
-    // Confirm the LEDC duty for the left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[9]);        // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(1, ledc_set_duty_fake.arg1_history[9]);        // config.Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(150, ledc_set_duty_fake.arg2_history[9]);      // Current_Speed
-
-    // Confirm the LEDC duty for the right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[10]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(2, ledc_set_duty_fake.arg1_history[10]);       // config.Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(150, ledc_set_duty_fake.arg2_history[10]);     // Current_Speed
-
-    // Confirm the LEDC duty for the right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[11]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(3, ledc_set_duty_fake.arg1_history[11]);       // config.Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[11]);     // 0.0
-    //  ============================================================
-
-
-    /*
-        ============================================================
-        Test 5: Check if the fake LEDC hardware is correctly called
-        in right().
-        ============================================================
-    */
-    driver.adjust_speed(100, 100);
-    driver.right();
-
-    // Confirm the number of calls for the LEDC duty.
-    TEST_ASSERT_EQUAL(16, ledc_set_duty_fake.call_count);
-
-    // Confirm the LEDC duty for the left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[12]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg1_history[12]);       // config.Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(100, ledc_set_duty_fake.arg2_history[12]);     // Current_Speed
-
-    // Confirm the LEDC duty for the left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[13]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(1, ledc_set_duty_fake.arg1_history[13]);       // config.Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[13]);     // 0.0
-
-    // Confirm the LEDC duty for the right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[14]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(2, ledc_set_duty_fake.arg1_history[14]);       // config.Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[14]);     // 0.0
-
-    // Confirm the LEDC duty for the right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[15]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(3, ledc_set_duty_fake.arg1_history[15]);       // config.Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(100, ledc_set_duty_fake.arg2_history[15]);     // Current_Speed
-    //  ============================================================
-
-
-    /*
-        ============================================================
-        Test 6: Check if the fake LEDC hardware is correctly called
-        in stop().
-        ============================================================
-    */
-    driver.brake();
-
-    // Confirm the number of calls for the LEDC duty.
-    TEST_ASSERT_EQUAL(20, ledc_set_duty_fake.call_count);
-
-    // Confirm the LEDC duty for the left motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[16]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg1_history[16]);       // config.Left_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[16]);     // 0.0
-
-    // Confirm the LEDC duty for the left motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[17]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(1, ledc_set_duty_fake.arg1_history[17]);       // config.Left_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[17]);     // 0.0
-
-    // Confirm the LEDC duty for the right motor's channel 1.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[18]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(2, ledc_set_duty_fake.arg1_history[18]);       // config.Right_Motor.channel_1
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[18]);     // 0.0
-
-    // Confirm the LEDC duty for the right motor's channel 2.
-    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[19]);       // LEDC_LOW_SPEED_MODE
-    TEST_ASSERT_EQUAL(3, ledc_set_duty_fake.arg1_history[19]);       // config.Right_Motor.channel_2
-    TEST_ASSERT_EQUAL(0.0, ledc_set_duty_fake.arg2_history[19]);     // 0.0
-    //  ============================================================
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(0, ledc_update_duty_fake.call_count);
 
     return;
 }
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the set_left_duty_cycle() and set_right_duty_cycle()
+    functions correctly updates the motors' duty cycles to
+    values in the 0-255 range.
+    ============================================================
+*/
+void test_motor_driver_set_duty_cycles(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(0);
+    driver.set_right_duty_cycle(255);
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(255, driver.get_right_duty_cycle());
+
+    driver.set_left_duty_cycle(1);
+    driver.set_right_duty_cycle(254);
+    TEST_ASSERT_EQUAL_UINT8(1, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(254, driver.get_right_duty_cycle());
+
+    driver.set_left_duty_cycle(150);
+    driver.set_right_duty_cycle(150);
+    TEST_ASSERT_EQUAL_UINT8(150, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(150, driver.get_right_duty_cycle());
+
+    driver.set_left_duty_cycle(254);
+    driver.set_right_duty_cycle(1);
+    TEST_ASSERT_EQUAL_UINT8(254, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(1, driver.get_right_duty_cycle());
+
+    driver.set_left_duty_cycle(255);
+    driver.set_right_duty_cycle(0);
+    TEST_ASSERT_EQUAL_UINT8(255, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_right_duty_cycle());
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the forward() function correctly spins both motors
+    forward.
+    ============================================================
+*/
+void test_motor_driver_forward(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(255);
+    driver.set_right_duty_cycle(255);
+    TEST_ASSERT_EQUAL_UINT8(255, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(255, driver.get_right_duty_cycle());
+
+    driver.forward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the backward() function correctly spins both motors
+    backward.
+    ============================================================
+*/
+void test_motor_driver_backward(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(255);
+    driver.set_right_duty_cycle(255);
+    TEST_ASSERT_EQUAL_UINT8(255, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(255, driver.get_right_duty_cycle());
+
+    driver.backward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the left_turn() function correctly spins the left motor
+    backward and the right motor forward.
+    ============================================================
+*/
+void test_motor_driver_left_turn(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(255);
+    driver.set_right_duty_cycle(255);
+    TEST_ASSERT_EQUAL_UINT8(255, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(255, driver.get_right_duty_cycle());
+
+    driver.left_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the right_turn() function correctly spins the left
+    motor forward and the right motor backward.
+    ============================================================
+*/
+void test_motor_driver_right_turn(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(255);
+    driver.set_right_duty_cycle(255);
+    TEST_ASSERT_EQUAL_UINT8(255, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(255, driver.get_right_duty_cycle());
+
+    driver.right_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the stop() function correctly stops the left motor and
+    the right motor from spinning.
+    ============================================================
+*/
+void test_motor_driver_stop(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.stop();
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_right_duty_cycle());
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can move forward and then forward.
+    ============================================================
+*/
+void test_motor_driver_forward_to_forward(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.forward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.forward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can move forward and then backward.
+    ============================================================
+*/
+void test_motor_driver_forward_to_backward(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.forward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.backward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can move forward and then left turn.
+    ============================================================
+*/
+void test_motor_driver_forward_to_left_turn(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.forward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.left_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can move forward and then right turn.
+    ============================================================
+*/
+void test_motor_driver_forward_to_right_turn(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.forward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.right_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can move forward and then stop.
+    ============================================================
+*/
+void test_motor_driver_forward_to_stop(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.forward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.stop();
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_right_duty_cycle());
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can move backward and then forward.
+    ============================================================
+*/
+void test_motor_driver_backward_to_forward(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.backward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.forward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can move backward and then backward.
+    ============================================================
+*/
+void test_motor_driver_backward_to_backward(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.backward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.backward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can move backward and then left turn.
+    ============================================================
+*/
+void test_motor_driver_backward_to_left_turn(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.backward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.left_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can move backward and then right turn.
+    ============================================================
+*/
+void test_motor_driver_backward_to_right_turn(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.backward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.right_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can move backward and then stop.
+    ============================================================
+*/
+void test_motor_driver_backward_to_stop(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.backward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.stop();
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_right_duty_cycle());
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can left turn and then forward.
+    ============================================================
+*/
+void test_motor_driver_left_turn_to_forward(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.left_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.forward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can left turn and then backward.
+    ============================================================
+*/
+void test_motor_driver_left_turn_to_backward(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.left_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.backward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can left turn and then left turn.
+    ============================================================
+*/
+void test_motor_driver_left_turn_to_left_turn(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.left_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.left_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can left turn and then right turn.
+    ============================================================
+*/
+void test_motor_driver_left_turn_to_right_turn(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.left_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.right_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can left turn and then stop.
+    ============================================================
+*/
+void test_motor_driver_left_turn_to_stop(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.left_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.stop();
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_right_duty_cycle());
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can right turn and then forward.
+    ============================================================
+*/
+void test_motor_driver_right_turn_to_forward(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.right_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.forward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can right turn and then backward.
+    ============================================================
+*/
+void test_motor_driver_right_turn_to_backward(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.right_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.backward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can right turn and then left turn.
+    ============================================================
+*/
+void test_motor_driver_right_turn_to_left_turn(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.right_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.left_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can right turn and then right turn.
+    ============================================================
+*/
+void test_motor_driver_right_turn_to_right_turn(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.right_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.right_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can right turn and then stop.
+    ============================================================
+*/
+void test_motor_driver_right_turn_to_stop(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(123);
+    driver.set_right_duty_cycle(123);
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, driver.get_right_duty_cycle());
+
+    driver.right_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.stop();
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_right_duty_cycle());
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can stop and then forward.
+    ============================================================
+*/
+void test_motor_driver_stop_to_forward(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.stop();
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_right_duty_cycle());
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.forward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can stop and then backward.
+    ============================================================
+*/
+void test_motor_driver_stop_to_backward(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.stop();
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_right_duty_cycle());
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.backward();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can stop and then left turn.
+    ============================================================
+*/
+void test_motor_driver_stop_to_left_turn(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.stop();
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_right_duty_cycle());
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.left_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can stop and then right turn.
+    ============================================================
+*/
+void test_motor_driver_stop_to_right_turn(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.stop();
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_right_duty_cycle());
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.set_left_duty_cycle(231);
+    driver.set_right_duty_cycle(231);
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, driver.get_right_duty_cycle());
+
+    driver.right_turn();
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test the motor driver can stop and then stop.
+    ============================================================
+*/
+void test_motor_driver_stop_to_stop(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+    
+    // Verify the duty cycle value gets updated.
+    driver.stop();
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_right_duty_cycle());
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(4, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[0]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[0]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[0]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[2]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[2]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[2]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+
+    // Verify the duty cycle value gets updated.
+    driver.stop();
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(0, driver.get_right_duty_cycle());
+
+    // Confirm the set duty and update duty were both called 4 times.
+    TEST_ASSERT_EQUAL(8, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(8, ledc_update_duty_fake.call_count);
+
+    // Verify that the left motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_set_duty_fake.arg1_history[4]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[4]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_0, ledc_update_duty_fake.arg1_history[4]);
+
+    // Verify that the left motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[5]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[5]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[5]);
+
+    // Verify that the right motor's channel 1 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_set_duty_fake.arg1_history[6]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[6]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_2, ledc_update_duty_fake.arg1_history[6]);
+
+    // Verify that the right motor's channel 2 is correctly configured.
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
+    TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    return;
+}
+//  ============================================================

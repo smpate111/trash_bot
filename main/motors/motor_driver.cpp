@@ -8,7 +8,7 @@
     class's methods and variables.
     ============================================================
 */
-#include <../include/motors/motor_driver.hpp>
+#include "motors/motor_driver.hpp"
 //  ============================================================
 
 
@@ -20,21 +20,53 @@
     ============================================================
 */
 Motor_Driver::Motor_Driver(const Driver_Config &driver_setup) : config(driver_setup) {
-    ESP_LOGI(config.name.c_str(), "Initialized driver.");
+    if (config.Left_Motor.is_initialized() == false) {
+        initialized = false;
+        ESP_LOGW(config.name.c_str(), "Failed to initialize the Left Motor.");
+        return;
+    }
+    else if (config.Right_Motor.is_initialized() == false) {
+        initialized = false;
+        ESP_LOGW(config.name.c_str(), "Failed to initialize the Right Motor.");
+        return;
+    }
+
+    initialized = true;
+    ESP_LOGI(config.name.c_str(), "Initialized motor driver.");
 }
 //  ============================================================
 
 
 /*
     ============================================================
-    Adjusts the speed for both motors.
+    Retrieves the initialized boolean.
     ============================================================
 */
-void Motor_Driver::adjust_speed(uint32_t left_speed, uint32_t right_speed) {
-    ESP_LOGI(config.name.c_str(), "Adjusting driver's speeds.");
+bool Motor_Driver::is_initialized() const {
+    return initialized;
+}
+//  ============================================================
 
-    config.Left_Motor.set_speed(left_speed);
-    config.Right_Motor.set_speed(right_speed);
+
+/*
+    ============================================================
+    Record the left motor's PWM output between 0 to 255.
+
+    NOTE: Callers must limit the calculated duty value before
+    converting it to uint8_t. An out-of-range integer converted
+    to uint8_t is narrowed to the destination type rather than
+    being rejected automatically.
+    ============================================================
+*/
+void Motor_Driver::set_left_duty_cycle(uint8_t left_duty) {
+    if (initialized == false) {
+        ESP_LOGW(config.name.c_str(), "Left motor is not initialized. Ignoring set_left_duty_cycle().");
+        return;
+    }
+
+    config.Left_Motor.set_duty_cycle(left_duty);
+    current_left_duty = config.Left_Motor.get_duty_cycle();
+    ESP_LOGI(config.name.c_str(), "Adjusted left motor's PWM output to: [%u].", current_left_duty);
     return;
 }
 //  ============================================================
@@ -42,12 +74,62 @@ void Motor_Driver::adjust_speed(uint32_t left_speed, uint32_t right_speed) {
 
 /*
     ============================================================
-    Drives both motors forward.
+    Retrieve the left motor's PWM output.
+    ============================================================
+*/
+uint8_t Motor_Driver::get_left_duty_cycle() const {
+    return current_left_duty;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Record the right motor's PWM output between 0 to 255.
+
+    NOTE: Callers must limit the calculated duty value before
+    converting it to uint8_t. An out-of-range integer converted
+    to uint8_t is narrowed to the destination type rather than
+    being rejected automatically.
+    ============================================================
+*/
+void Motor_Driver::set_right_duty_cycle(uint8_t right_duty) {
+    if (initialized == false) {
+        ESP_LOGW(config.name.c_str(), "Right motor is not initialized. Ignoring set_right_duty_cycle().");
+        return;
+    }
+
+    config.Right_Motor.set_duty_cycle(right_duty);
+    current_right_duty = config.Right_Motor.get_duty_cycle();
+    ESP_LOGI(config.name.c_str(), "Adjusted right motor's PWM output to: [%u].", current_right_duty);
+    return;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieve the right motor's PWM output.
+    ============================================================
+*/
+uint8_t Motor_Driver::get_right_duty_cycle() const {
+    return current_right_duty;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Spin both motors forward.
     ============================================================
 */
 void Motor_Driver::forward() {
-    ESP_LOGI(config.name.c_str(), "Making driver move forward.");
+    if (initialized == false) {
+        ESP_LOGW(config.name.c_str(), "Motor driver is not initialized. Ignoring forward().");
+        return;
+    }
 
+    ESP_LOGI(config.name.c_str(), "Making driver move forward.");
     config.Left_Motor.spin_forward();
     config.Right_Motor.spin_forward();
     return;
@@ -57,12 +139,16 @@ void Motor_Driver::forward() {
 
 /*
     ============================================================
-    Drives both motors backward.
+    Spin both motors backward.
     ============================================================
 */
 void Motor_Driver::backward() {
-    ESP_LOGI(config.name.c_str(), "Making driver move backward.");
+    if (initialized == false) {
+        ESP_LOGW(config.name.c_str(), "Motor driver is not initialized. Ignoring backward().");
+        return;
+    }
 
+    ESP_LOGI(config.name.c_str(), "Making driver move backward.");
     config.Left_Motor.spin_backward();
     config.Right_Motor.spin_backward();
     return;
@@ -72,13 +158,17 @@ void Motor_Driver::backward() {
 
 /*
     ============================================================
-    Drives the left motor backward and right motor forward to
-    make robot turn left.
+    Spins the left motor backward and spins the right motor
+    forward to make the robot turn left.
     ============================================================
 */
-void Motor_Driver::left() {
-    ESP_LOGI(config.name.c_str(), "Making driver turn left.");
+void Motor_Driver::left_turn() {
+    if (initialized == false) {
+        ESP_LOGW(config.name.c_str(), "Motor driver is not initialized. Ignoring left_turn().");
+        return;
+    }
 
+    ESP_LOGI(config.name.c_str(), "Making driver turn left.");
     config.Left_Motor.spin_backward();
     config.Right_Motor.spin_forward();
     return;
@@ -88,13 +178,17 @@ void Motor_Driver::left() {
 
 /*
     ============================================================
-    Drives the left motor forward and right motor backward to
-    make robot turn right.
+    Spins the left motor forward and spins the right motor
+    backward to make the robot turn right.
     ============================================================
 */
-void Motor_Driver::right() {
-    ESP_LOGI(config.name.c_str(), "Making driver turn right.");
+void Motor_Driver::right_turn() {
+    if (initialized == false) {
+        ESP_LOGW(config.name.c_str(), "Motor driver is not initialized. Ignoring right_turn().");
+        return;
+    }
 
+    ESP_LOGI(config.name.c_str(), "Making driver turn right.");
     config.Left_Motor.spin_forward();
     config.Right_Motor.spin_backward();
     return;
@@ -107,9 +201,15 @@ void Motor_Driver::right() {
     Stops both motors from spinning.
     ============================================================
 */
-void Motor_Driver::brake() {
-    ESP_LOGI(config.name.c_str(), "Making driver stop.");
+void Motor_Driver::stop() {
+    if (initialized == false) {
+        ESP_LOGW(config.name.c_str(), "Motor driver is not initialized. Ignoring stop().");
+        return;
+    }
 
+    ESP_LOGI(config.name.c_str(), "Making driver stop.");
+    set_left_duty_cycle(0);
+    set_right_duty_cycle(0);
     config.Left_Motor.stop();
     config.Right_Motor.stop();
     return;
