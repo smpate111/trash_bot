@@ -1,6 +1,5 @@
 /*
-    This file defines the Wheel Encoder class used to control a wheel encoder using
-    GPIO pins and PWM signals.
+    This file defines the Wheel Encoder class used to control a wheel encoder using a GPIO pin.
 */
 
 #ifndef WHEEL_ENCODER_HPP_
@@ -13,19 +12,10 @@
     Define the class's dependencies.
     ============================================================
 */
+#include <atomic>
+#include <cstdint>
 #include <driver/gpio.h>
-#include <driver/ledc.h>
-
-#include <esp_err.h>
 #include <esp_log.h>
-
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-
-#include <iostream>
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string>
 //  ============================================================
 
@@ -49,31 +39,33 @@ struct Encoder_Config {
 
 /*
     ============================================================
-    This class manages an encoder's ticks and direction.
+    This class manages an encoder's pulse count and distance
+    measurement.
     ============================================================
 */
 class Wheel_Encoder {
     // Set these methods to public to allow access and control from outside the class.
     public:
         explicit Wheel_Encoder(const Encoder_Config &encoder_setup);
-
-        virtual ~Wheel_Encoder() = default;
+        ~Wheel_Encoder() = default;
+        bool is_initialized() const;
 
         static void IRAM_ATTR isr_handler(void *arg);
 
-        virtual void reset_count();
-        virtual double calculate_distance();
-        //virtual double measure_velocity();
-
         uint32_t get_pulse_count() const;
         void set_pulse_count(uint32_t count);
+        void reset_count();
+
+        double calculate_distance();
+
+        static constexpr double PI = 3.14159265358979323846;
 
     // Set these variables to private to prevent access and modifications from outside the class.
     private:
-        Encoder_Config config;
-        volatile uint32_t pulse_count = 0;
-        volatile uint32_t last_pulse_count = 0;
-        volatile uint32_t pulse_difference = 0;
+        const Encoder_Config config;
+        bool initialized = false;
+        std::atomic<uint32_t> pulse_count{0};
+        
 };
 //  ============================================================
 

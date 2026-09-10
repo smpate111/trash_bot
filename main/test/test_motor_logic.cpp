@@ -11,7 +11,7 @@
     ============================================================
 */
 
-#include <motors/motor.hpp>
+#include "motors/motor.hpp"
 
 #include <test/mock_libraries/mock_hardware.hpp>
 
@@ -103,7 +103,7 @@ void test_motor_initialization_gpio_reset_failure(void) {
     ============================================================
 */
 void test_motor_initialization_gpio_direction_failure(void) {
-    // Configure the fake GPIO reset function to fail.
+    // Configure the fake GPIO direction function to fail.
     gpio_set_direction_fake.return_val = ESP_FAIL;
 
     // Create the motor object.

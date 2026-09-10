@@ -59,6 +59,9 @@ typedef void (*gpio_isr_t)(void*);
 #define GPIO_NUM_16           16
 #define GPIO_NUM_17           17
 #define GPIO_NUM_18           18
+#define GPIO_NUM_36           36
+#define GPIO_NUM_37           37
+#define GPIO_NUM_38           38
 #define GPIO_NUM_42           42
 #define GPIO_PULLUP_DISABLE   0
 #define GPIO_PULLUP_ENABLE    1

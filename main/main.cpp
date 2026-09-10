@@ -4,6 +4,7 @@
     ============================================================
 */
 #include <driver/gpio.h>
+#include <driver/ledc.h>
 
 #include <esp_log.h>
 
@@ -23,7 +24,7 @@
 #include "motors/motor.hpp"
 #include "motors/motor_driver.hpp"
 
-//#include <../include/sensors/wheel_encoder.hpp>
+#include "sensors/wheel_encoder.hpp"
 //#include <../include/sensors/ultrasonic.hpp>
 //  ============================================================
 
@@ -85,6 +86,24 @@ extern "C" {
     ============================================================
 */
 void app_main(void) {
+    /*
+    led_strip_handle_t led_strip;
+    // Configure the NeoPixel LED strip configuration.
+    led_strip_config_t strip = {};
+    strip.strip_gpio_num = GPIO_NUM_38;
+    strip.max_leds = 1;                 // The board has 1 LED
+    strip.led_model = LED_MODEL_WS2812; // The onboard LED model
+
+    // Configure the RMT peripheral backend driver
+    led_strip_rmt_config_t rmt = {};
+    rmt.clk_src = RMT_CLK_SRC_DEFAULT;
+
+    // Initialize the led strip driver
+    led_strip_new_rmt_device(&strip, &rmt, &led_strip);
+
+    led_strip_clear(led_strip);
+    */
+
     // Configure the PWM timer to specify the PWM signal's frequency and duty cycle resolution.
     ledc_timer_config_t timer_config = {};
 
@@ -113,7 +132,7 @@ void app_main(void) {
 
     // Configure the motors by defining their pins and channels.
     Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
-    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
     Motor_Config bl_config = {"Back Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
     Motor_Config br_config = {"Back Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
 
@@ -123,7 +142,7 @@ void app_main(void) {
     Motor bl_motor(bl_config);
     Motor br_motor(br_config);
 
-    // Configure the motor drivers
+    // Configure the motor drivers.
     Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
     Driver_Config bmd_config = {"Back Motor Driver", bl_motor, br_motor};
 
@@ -131,8 +150,45 @@ void app_main(void) {
     Motor_Driver fm_driver(fmd_config);
     Motor_Driver bm_driver(bmd_config);
 
+    // Configure the wheel encoders.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+
+    // Initialize the wheel encoders.
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    /*
     vTaskDelay(pdMS_TO_TICKS(2000));
 
+    for (int i = 0; i < 10; i++) {
+        lw_encoder.reset_count();
+        rw_encoder.reset_count();
+        fm_driver.set_left_duty_cycle(255);
+        fm_driver.set_right_duty_cycle(255);
+        bm_driver.set_left_duty_cycle(255);
+        bm_driver.set_right_duty_cycle(255);
+
+        fm_driver.forward();
+        bm_driver.forward();
+
+        vTaskDelay(pdMS_TO_TICKS(2000));
+
+        fm_driver.stop();
+        bm_driver.stop();
+        lw_encoder.reset_count();
+        rw_encoder.reset_count();
+
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+    */
+
+
+    
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    lw_encoder.reset_count();
+    rw_encoder.reset_count();
     fm_driver.set_left_duty_cycle(255);
     fm_driver.set_right_duty_cycle(255);
     bm_driver.set_left_duty_cycle(255);
@@ -145,9 +201,13 @@ void app_main(void) {
 
     fm_driver.stop();
     bm_driver.stop();
+    lw_encoder.reset_count();
+    rw_encoder.reset_count();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
+    lw_encoder.reset_count();
+    rw_encoder.reset_count();
     fm_driver.set_left_duty_cycle(215);
     fm_driver.set_right_duty_cycle(215);
     bm_driver.set_left_duty_cycle(215);
@@ -160,9 +220,13 @@ void app_main(void) {
 
     fm_driver.stop();
     bm_driver.stop();
+    lw_encoder.reset_count();
+    rw_encoder.reset_count();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
+    lw_encoder.reset_count();
+    rw_encoder.reset_count();
     fm_driver.set_left_duty_cycle(190);
     fm_driver.set_right_duty_cycle(190);
     bm_driver.set_left_duty_cycle(190);
@@ -175,6 +239,8 @@ void app_main(void) {
 
     fm_driver.stop();
     bm_driver.stop();
+    lw_encoder.reset_count();
+    rw_encoder.reset_count();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
@@ -190,8 +256,11 @@ void app_main(void) {
 
     fm_driver.stop();
     bm_driver.stop();
+    lw_encoder.reset_count();
+    rw_encoder.reset_count();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
+    
 
 
     /*

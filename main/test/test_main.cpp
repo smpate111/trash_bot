@@ -15,7 +15,8 @@
 
 #include <test/test_motor_logic.cpp>
 #include <test/test_motor_driver_logic.cpp>
-//#include <test/test_wheel_encoder_logic.cpp>
+
+#include <test/test_wheel_encoder_logic.cpp>
 //#include <test/test_ultrasonic_logic.cpp>
 
 //#include <test/test_drive_train_logic.cpp>
@@ -35,15 +36,15 @@ DEFINE_FAKE_VALUE_FUNC(esp_err_t, ledc_update_duty, ledc_mode_t, ledc_channel_t)
 
 // Define the fake GPIO functions.
 DEFINE_FAKE_VALUE_FUNC(esp_err_t, gpio_config, const gpio_config_t*)
-//DEFINE_FAKE_VALUE_FUNC(esp_err_t, gpio_isr_handler_add, gpio_num_t, gpio_isr_t, void*);
+DEFINE_FAKE_VALUE_FUNC(esp_err_t, gpio_isr_handler_add, gpio_num_t, gpio_isr_t, void*);
 DEFINE_FAKE_VALUE_FUNC(esp_err_t, gpio_reset_pin, gpio_num_t);
 DEFINE_FAKE_VALUE_FUNC(esp_err_t, gpio_set_direction, gpio_num_t, gpio_mode_t);
-//DEFINE_FAKE_VALUE_FUNC(esp_err_t, gpio_set_level, gpio_num_t, uint32_t);
-//DEFINE_FAKE_VALUE_FUNC(int, gpio_get_level, gpio_num_t);
+DEFINE_FAKE_VALUE_FUNC(esp_err_t, gpio_set_level, gpio_num_t, uint32_t);
+DEFINE_FAKE_VALUE_FUNC(int, gpio_get_level, gpio_num_t);
 
 
 // Define the fake ESP32 timer.
-//DEFINE_FAKE_VALUE_FUNC(int64_t, esp_timer_get_time);
+DEFINE_FAKE_VALUE_FUNC(int64_t, esp_timer_get_time);
 
 
 // Define the fake FreeRTOS functions.
@@ -70,13 +71,13 @@ void setUp(void) {
     RESET_FAKE(ledc_update_duty);
 
     RESET_FAKE(gpio_config);
-    //RESET_FAKE(gpio_isr_handler_add);
+    RESET_FAKE(gpio_isr_handler_add);
     RESET_FAKE(gpio_reset_pin);
     RESET_FAKE(gpio_set_direction);
-    //RESET_FAKE(gpio_set_level);
-    //RESET_FAKE(gpio_get_level);
+    RESET_FAKE(gpio_set_level);
+    RESET_FAKE(gpio_get_level);
 
-    //RESET_FAKE(esp_timer_get_time);
+    RESET_FAKE(esp_timer_get_time);
 
     //RESET_FAKE(xQueueCreate);
     //RESET_FAKE(xQueueSend);
@@ -186,6 +187,23 @@ extern "C" void app_main(void) {
     RUN_TEST(test_motor_driver_stop_to_left_turn);
     RUN_TEST(test_motor_driver_stop_to_right_turn);
     RUN_TEST(test_motor_driver_stop_to_stop);
+
+    // Test the wheel encoder component.
+    RUN_TEST(test_wheel_encoder_hardware_initialization);
+    RUN_TEST(test_wheel_encoder_initialization_gpio_reset_failure);
+    RUN_TEST(test_wheel_encoder_initialization_gpio_direction_failure);
+    RUN_TEST(test_wheel_encoder_initialization_invalid_slots);
+    RUN_TEST(test_wheel_encoder_initialization_invalid_diameter);
+    RUN_TEST(test_wheel_encoder_initialization_gpio_config_failure);
+    RUN_TEST(test_wheel_encoder_initialization_isr_failure);
+    RUN_TEST(test_wheel_encoder_commands_lockout_after_initialization);
+
+    RUN_TEST(test_wheel_encoder_pulse_count);
+
+    RUN_TEST(test_wheel_encoder_trigger_ISR);
+
+    RUN_TEST(test_wheel_encoder_distance_calculations);
+
 
     // Test the components.
     //RUN_TEST(test_wheel_encoder_functions);

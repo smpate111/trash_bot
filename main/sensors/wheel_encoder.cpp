@@ -8,7 +8,7 @@
     class's methods and variables.
     ============================================================
 */
-#include <../include/sensors/wheel_encoder.hpp>
+#include "sensors/wheel_encoder.hpp"
 //  ============================================================
 
 
@@ -16,14 +16,32 @@
 /*
     ============================================================
     Constructor for the Wheel Encoder class that initializes the
-    wheel encoder sensor with user-defined values and configures
-    the timer and channels.
+    wheel encoder sensor with user-defined values.
     ============================================================
 */
 Wheel_Encoder::Wheel_Encoder(const Encoder_Config &encoder_setup) : config(encoder_setup) {
     // Configure the GPIO pin to be an input pin.
-    gpio_reset_pin(config.out_pin);
-    gpio_set_direction(config.out_pin, GPIO_MODE_INPUT);
+    esp_err_t err = gpio_reset_pin(config.out_pin);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to reset GPIO Pin [%d].", config.out_pin);
+        return;
+    }
+
+    err = gpio_set_direction(config.out_pin, GPIO_MODE_INPUT);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to configure GPIO Pin [%d] as input.", config.out_pin);
+        return;
+    }
+
+    // Ensure the encoder slots and wheel diameter are greater than 0 or else the calculations would not work.
+    if (config.encoder_slots <= 0) {
+        ESP_LOGW(config.name.c_str(), "Initialization failure. # of encoder slots is less than or equal to 0.");
+        return;
+    }
+    if (config.wheel_diameter <= 0) {
+        ESP_LOGW(config.name.c_str(), "Initialization failure. Wheel diameter is less than or equal to 0mm.");
+        return;
+    }
 
     // Configure the sensor.
     gpio_config_t wheel_encoder_config = {};
@@ -33,18 +51,40 @@ Wheel_Encoder::Wheel_Encoder(const Encoder_Config &encoder_setup) : config(encod
     wheel_encoder_config.pull_down_en = GPIO_PULLDOWN_DISABLE;      // Disable the pull-down resistor.
     wheel_encoder_config.intr_type = GPIO_INTR_NEGEDGE;             // Configure the interrupt to trigger on falling edge (1 to 0).
     
-    gpio_config(&wheel_encoder_config);
+    err = gpio_config(&wheel_encoder_config);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to configure wheel encoder GPIO.");
+        return;
+    }
+
+    // Configure the ISR.
+    err = gpio_isr_handler_add(config.out_pin, isr_handler, this);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to initialize wheel encoder ISR.");
+        return;
+    }
+
     ESP_LOGI(
         config.name.c_str(),
-        "Initialized wheel encoder on pin %d, set wheel diameter to %0.4fmm, set # of encoder slots to %d.",
+        "Initialized wheel encoder on GPIO Pin [%d], set wheel diameter to [%0.4fmm], set # of encoder slots to [%d], and initialized ISR.",
         config.out_pin,
         config.wheel_diameter,
         config.encoder_slots
     );
-
-    gpio_isr_handler_add(config.out_pin, isr_handler, this);
-    ESP_LOGI(config.name.c_str(), "Initialized ISR for wheel encoder.");
+    initialized = true;
 }
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieves the initialized boolean.
+    ============================================================
+*/
+bool Wheel_Encoder::is_initialized() const {
+    return initialized;
+}
+//  ============================================================
 
 
 /*
@@ -54,8 +94,37 @@ Wheel_Encoder::Wheel_Encoder(const Encoder_Config &encoder_setup) : config(encod
     ============================================================
 */
 void IRAM_ATTR Wheel_Encoder::isr_handler(void *arg) {
-    Wheel_Encoder *we = static_cast<Wheel_Encoder*>(arg);
-    we->set_pulse_count(we->get_pulse_count() + 1);
+    auto *we = static_cast<Wheel_Encoder*>(arg);
+    we->pulse_count.fetch_add(1, std::memory_order_relaxed);
+    return;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieve the wheel encoder's pulse count.
+    ============================================================
+*/
+uint32_t Wheel_Encoder::get_pulse_count() const {
+    return pulse_count.load(std::memory_order_relaxed);
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Record the wheel encoder's pulse count.
+    ============================================================
+*/
+void Wheel_Encoder::set_pulse_count(uint32_t count) {
+    if (initialized == false) {
+        ESP_LOGW(config.name.c_str(), "Wheel encoder is not initialized. Ignoring set_pulse_count().");
+        return;
+    }
+
+    //ESP_LOGI(config.name.c_str(), "Pulse count is set to to: [%u].", count);
+    pulse_count.store(count, std::memory_order_relaxed);
     return;
 }
 //  ============================================================
@@ -68,9 +137,13 @@ void IRAM_ATTR Wheel_Encoder::isr_handler(void *arg) {
     ============================================================
 */
 void Wheel_Encoder::reset_count() {
-    ESP_LOGI(config.name.c_str(), "Total pulses counted is: %lu. Resetting count to 0.", get_pulse_count());
-    //pulse_count = 0;
-    set_pulse_count(0);
+    if (initialized == false) {
+        ESP_LOGW(config.name.c_str(), "Wheel encoder is not initialized. Ignoring reset_count().");
+        return;
+    }
+
+    ESP_LOGI(config.name.c_str(), "Total pulses counted is: [%u]. Resetting count to: [0].", pulse_count.load(std::memory_order_relaxed));
+    pulse_count.store(0, std::memory_order_relaxed);
     return;
 }
 //  ============================================================
@@ -84,49 +157,13 @@ void Wheel_Encoder::reset_count() {
     ============================================================
 */
 double Wheel_Encoder::calculate_distance() {
-    double distance = get_pulse_count() * ((3.142857 * config.wheel_diameter) / config.encoder_slots);
-    //ESP_LOGI(config.name.c_str(), "Distance traveled is: %0.4fmm.", distance);
+    if (initialized == false) {
+        ESP_LOGW(config.name.c_str(), "Wheel encoder is not initialized. Ignoring calculate_distance().");
+        return 0.0;
+    }
+
+    double distance = pulse_count * ((PI * config.wheel_diameter) / config.encoder_slots);
+    //ESP_LOGI(config.name.c_str(), "Distance traveled is: [%0.4fmm].", distance);
     return distance;
-}
-//  ============================================================
-
-
-/*
-    ============================================================
-    Measures the motor's velocity by dividing the difference of
-    the current and previous pulse count by the number of
-    encoder slots and then multiplying it by 60 seconds to get
-    the revolutions per minute.
-    ============================================================
-*/
-/*
-double Wheel_Encoder::measure_velocity() {
-    pulse_difference = pulse_count - last_pulse_count;
-    last_pulse_count = pulse_count;
-    return static_cast<double>((pulse_difference / config.encoder_slots) * 60.0);
-}
-*/
-//  ============================================================
-
-
-/*
-    ============================================================
-    Retrieve the wheel encoder's pulse count.
-    ============================================================
-*/
-uint32_t Wheel_Encoder::get_pulse_count() const {
-    return pulse_count;
-}
-//  ============================================================
-
-
-/*
-    ============================================================
-    Record the wheel encoder's pulse count.
-    ============================================================
-*/
-void Wheel_Encoder::set_pulse_count(uint32_t count) {
-    pulse_count = count;
-    return;
 }
 //  ============================================================
