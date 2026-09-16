@@ -11,15 +11,20 @@
     ============================================================
 */
 
-#include <test/mock_libraries/mock_hardware.hpp>
+//#include <test/mock_libraries/mock_hardware.hpp>
+#include "mock_libraries/mock_hardware.hpp"
 
-#include <test/test_motor_logic.cpp>
-#include <test/test_motor_driver_logic.cpp>
+//#include <test/test_motor_logic.cpp>
+#include "test_motor_logic.cpp"
+//#include <test/test_motor_driver_logic.cpp>
+#include "test_motor_driver_logic.cpp"
 
-#include <test/test_wheel_encoder_logic.cpp>
+//#include <test/test_wheel_encoder_logic.cpp>
+#include "test_wheel_encoder_logic.cpp"
 //#include <test/test_ultrasonic_logic.cpp>
 
 //#include <test/test_drive_train_logic.cpp>
+#include "test_drive_train_logic.cpp"
 //#include <test/test_robot_controller_logic.cpp>
 //#include <test/test_obstacle_avoidance_logic.cpp>
 //  ============================================================
@@ -108,6 +113,25 @@ void tearDown(void) {}
 //  ============================================================
 
 
+/*
+    ============================================================
+    Tear down the functions after finishing the tests.
+    ============================================================
+*/
+const char* esp_err_to_name(esp_err_t err) {
+    if (err == ESP_OK) {
+        return "ESP_OK";
+    }
+
+    if (err == ESP_FAIL) {
+        return "ESP_FAIL";
+    }
+
+    return "ESP_UNKNOWN";
+}
+//  ============================================================
+
+
 
 /*
     ============================================================
@@ -124,7 +148,11 @@ extern "C" void app_main(void) {
     RUN_TEST(test_motor_initialization_gpio_reset_failure);
     RUN_TEST(test_motor_initialization_gpio_direction_failure);
     RUN_TEST(test_motor_initialization_ledc_config_failure);
+
     RUN_TEST(test_motor_commands_lockout_after_initialization_failure);
+
+    RUN_TEST(test_motor_enters_fault_after_ledc_set_failure);
+    RUN_TEST(test_motor_enters_fault_after_ledc_update_failure);
 
     RUN_TEST(test_motor_set_duty_cycle);
 
@@ -148,7 +176,11 @@ extern "C" void app_main(void) {
     RUN_TEST(test_motor_driver_hardware_initialization);
     RUN_TEST(test_motor_driver_initialization_left_motor_failure);
     RUN_TEST(test_motor_driver_initialization_right_motor_failure);
+    
     RUN_TEST(test_motor_driver_commands_lockout_after_initialization);
+    
+    RUN_TEST(test_motor_driver_enters_fault_after_ledc_set_failure);
+    RUN_TEST(test_motor_driver_enters_fault_after_ledc_update_failure);
 
     RUN_TEST(test_motor_driver_set_duty_cycles);
 
@@ -204,9 +236,50 @@ extern "C" void app_main(void) {
 
     RUN_TEST(test_wheel_encoder_distance_calculations);
 
+    // Test the drive train component.
+    RUN_TEST(test_drive_train_hardware_initialization);
+    RUN_TEST(test_drive_train_initialization_front_driver_failure);
+    RUN_TEST(test_drive_train_initialization_rear_driver_failure);
+    RUN_TEST(test_drive_train_initialization_left_encoder_failure);
+    RUN_TEST(test_drive_train_initialization_right_encoder_failure);
+
+    RUN_TEST(test_drive_train_commands_lockout_after_initialization);
+    RUN_TEST(test_drive_train_commands_lockout_after_failure);
+
+    RUN_TEST(test_drive_train_set_duty_cycles);
+
+    RUN_TEST(test_drive_train_forward);
+    RUN_TEST(test_drive_train_backward);
+    RUN_TEST(test_drive_train_left_turn);
+    RUN_TEST(test_drive_train_right_turn);
+    RUN_TEST(test_drive_train_stop);
+
+    RUN_TEST(test_drive_train_forward_to_forward);
+    RUN_TEST(test_drive_train_forward_to_backward);
+    RUN_TEST(test_drive_train_forward_to_left_turn);
+    RUN_TEST(test_drive_train_forward_to_right_turn);
+    RUN_TEST(test_drive_train_forward_to_stop);
+
+    RUN_TEST(test_drive_train_backward_to_forward);
+    RUN_TEST(test_drive_train_backward_to_backward);
+    RUN_TEST(test_drive_train_backward_to_left_turn);
+    RUN_TEST(test_drive_train_backward_to_right_turn);
+    RUN_TEST(test_drive_train_backward_to_stop);
+
+    RUN_TEST(test_drive_train_left_turn_to_forward);
+    RUN_TEST(test_drive_train_left_turn_to_backward);
+    RUN_TEST(test_drive_train_left_turn_to_left_turn);
+    RUN_TEST(test_drive_train_left_turn_to_right_turn);
+    RUN_TEST(test_drive_train_left_turn_to_stop);
+
+    RUN_TEST(test_drive_train_stop_to_forward);
+    RUN_TEST(test_drive_train_stop_to_backward);
+    RUN_TEST(test_drive_train_stop_to_left_turn);
+    RUN_TEST(test_drive_train_stop_to_right_turn);
+    RUN_TEST(test_drive_train_stop_to_stop);
+
 
     // Test the components.
-    //RUN_TEST(test_wheel_encoder_functions);
     //RUN_TEST(test_ultrasonic_functions);
 
     // Test the controllers.

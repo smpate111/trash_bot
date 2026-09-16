@@ -11,336 +11,3051 @@
     ============================================================
 */
 
-#include <motors/motor.hpp>
-#include <motors/motor_driver.hpp>
-#include <controllers/drive_train.hpp>
+#include "motors/motor.hpp"
+#include "motors/motor_driver.hpp"
+#include "controllers/drive_train.hpp"
 
-#include <test/mock_libraries/mock_hardware.hpp>
+#include "mock_libraries/mock_hardware.hpp"
 
 //  ============================================================
 
 
 
-// Global variables that tracks hardware configurations.
-constexpr int number_of_pins = 10;
-constexpr int number_of_ledc_channels = 8;
-constexpr int number_of_gpio_configs = 2;
-constexpr int number_of_interrupts = 2;
-static int pins[number_of_pins];
-static int ledc_channels[number_of_ledc_channels];
-static double expected_duties[number_of_ledc_channels];
-static int interrupts[number_of_interrupts];
-
-enum movement {
-    FORWARD,
-    BACKWARD,
-    LEFT,
-    RIGHT,
-    STOP
-};
-
-
-
 /*
     ============================================================
-    Helper function that creates the drive train object.
+    Test that the Drive_Train's constructor initializes
+    correctly.
     ============================================================
 */
-Drive_Train create_drive_train() {
+void test_drive_train_hardware_initialization(void) {
     // Create the motor objects.
-    static Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
-    static Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
-    static Motor_Config bl_config = {"Back Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
-    static Motor_Config br_config = {"Back Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
 
-    static Motor fl_motor(fl_config);
-    static Motor fr_motor(fr_config);
-    static Motor bl_motor(bl_config);
-    static Motor br_motor(br_config);
+    // Verify the motors are initialized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
 
     // Create the motor driver objects.
-    static Driver_Config fd_config = {"Front Driver", fl_motor, fr_motor};
-    static Driver_Config bd_config = {"Back Driver", bl_motor, br_motor};
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
 
-    static Motor_Driver f_driver(fd_config);
-    static Motor_Driver b_driver(bd_config);
+    // Verify the motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
 
     // Create the wheel encoder objects.
-    static Encoder_Config le_config = {"Left Encoder", GPIO_NUM_1, 80.0, 20};
-    static Encoder_Config re_config = {"Right Encoder", GPIO_NUM_2, 80.0, 20};
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
 
-    static Wheel_Encoder l_encoder(le_config);
-    static Wheel_Encoder r_encoder(re_config);
+    // Verify the wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
 
-    // Configure the drive train object.
-    static Train_Config t_config = {"Drive Train", f_driver, b_driver, &l_encoder, &r_encoder};
-
-    pins[0] = GPIO_NUM_11;
-    pins[1] = GPIO_NUM_12;
-    pins[2] = GPIO_NUM_13;
-    pins[3] = GPIO_NUM_14;
-    pins[4] = GPIO_NUM_6;
-    pins[5] = GPIO_NUM_7;
-    pins[6] = GPIO_NUM_15;
-    pins[7] = GPIO_NUM_16;
-    pins[8] = GPIO_NUM_1;
-    pins[9] = GPIO_NUM_2;
-
-    ledc_channels[0] = LEDC_CHANNEL_0;
-    ledc_channels[1] = LEDC_CHANNEL_1;
-    ledc_channels[2] = LEDC_CHANNEL_2;
-    ledc_channels[3] = LEDC_CHANNEL_3;
-    ledc_channels[4] = LEDC_CHANNEL_5;
-    ledc_channels[5] = LEDC_CHANNEL_4;
-    ledc_channels[6] = LEDC_CHANNEL_7;
-    ledc_channels[7] = LEDC_CHANNEL_6;
-
-    interrupts[0] = GPIO_NUM_1;
-    interrupts[1] = GPIO_NUM_2;
-
-    return Drive_Train(t_config);
-}
-//  ============================================================
-
-
-
-/*
-    ============================================================
-    Confirm that the drive train's constructor initializes
-    the object correctly. Confirm that start_task() creates a
-    FreeRTOS task.
-    ============================================================
-*/
-void test_drive_train_initialization(Drive_Train &d_train) {
-    // Verify the drive train hardware is initialized.
-    for (int i = 0; i < number_of_pins; i++) {
-        TEST_ASSERT_EQUAL(pins[i], gpio_reset_pin_fake.arg0_history[i]);
-        TEST_ASSERT_EQUAL(pins[i], gpio_set_direction_fake.arg0_history[i]);
-
-        if (i < 8) {
-            TEST_ASSERT_EQUAL(GPIO_MODE_OUTPUT, gpio_set_direction_fake.arg1_history[i]);
-        }
-        else if ((i >= 8) && (i < 10)) {
-            TEST_ASSERT_EQUAL(GPIO_MODE_INPUT, gpio_set_direction_fake.arg1_history[i]);
-        }
-    }
-
-    for (int i = 0; i < number_of_interrupts; i++) {
-        TEST_ASSERT_EQUAL(interrupts[i], gpio_isr_handler_add_fake.arg0_history[i]);
-    }
-
-    TEST_ASSERT_EQUAL(number_of_pins, gpio_reset_pin_fake.call_count);
-    TEST_ASSERT_EQUAL(number_of_pins, gpio_set_direction_fake.call_count);
-    TEST_ASSERT_EQUAL(number_of_ledc_channels, ledc_channel_config_fake.call_count);
-    TEST_ASSERT_EQUAL(number_of_interrupts, gpio_isr_handler_add_fake.call_count);
-    TEST_ASSERT_EQUAL(number_of_gpio_configs, gpio_config_fake.call_count);
-
-    // Verify the Odometry Task is created.
-    d_train.start_task();
-    TEST_ASSERT_EQUAL(1, xTaskCreate_fake.call_count);
-    TEST_ASSERT_EQUAL_STRING("Odometry_Task", xTaskCreate_fake.arg1_history[0]);
-    TEST_ASSERT_EQUAL(4096, xTaskCreate_fake.arg2_history[0]);
-    TEST_ASSERT_EQUAL(&d_train, xTaskCreate_fake.arg3_history[0]);
-    TEST_ASSERT_EQUAL(4, xTaskCreate_fake.arg4_history[0]);
-    TEST_ASSERT_EQUAL(nullptr, xTaskCreate_fake.arg5_history[0]);
-
-    return;
-}
-//  ============================================================
-
-
-
-/*
-    ============================================================
-    Confirm that the drive train performs the correct movements.
-    ============================================================
-*/
-void test_drive_train_movement(
-        Drive_Train &d_train, movement command, int speed, uint32_t duration,
-        uint32_t pulses_per_second, int ledc_calls
-    ) {
-        // Verify the pulse count is 0 before performing the count.
-        Wheel_Encoder l_encoder = d_train.get_left_encoder();
-        Wheel_Encoder r_encoder = d_train.get_right_encoder();
-
-        l_encoder.reset_count();
-        r_encoder.reset_count();
-        
-        TEST_ASSERT_EQUAL(0, d_train.get_pulses(l_encoder));
-        TEST_ASSERT_EQUAL(0, d_train.get_pulses(r_encoder));
-
-        // Verify the movement.
-        d_train.change_speed(speed, speed);
-
-        switch(command) {
-            case movement::FORWARD:
-                d_train.move_forward();
-                break;
-
-            case movement::BACKWARD:
-                d_train.move_backward();
-                break;
-
-            case movement::LEFT:
-                d_train.turn_left();
-                break;
-
-            case movement::RIGHT:
-                d_train.turn_right();
-                break;
-
-            case movement::STOP:
-                d_train.brake_all();
-                break;
-        }
-
-        TEST_ASSERT_EQUAL(ledc_calls, ledc_set_duty_fake.call_count);
-
-        for (int i = 0; i < number_of_ledc_channels; i++) {
-            int history_i = i;
-            
-            if (ledc_calls > 9) {
-                history_i = history_i + (ledc_calls - 8);
-            }
-            
-            TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg0_history[history_i]);
-            TEST_ASSERT_EQUAL(ledc_channels[i], ledc_set_duty_fake.arg1_history[history_i]);
-            TEST_ASSERT_EQUAL(expected_duties[i], ledc_set_duty_fake.arg2_history[history_i]);
-        }
-
-        // Simulate the ISR when the robot is moving.
-        if (command != movement::STOP) {
-            // Multiply the duration by the number of pulses per second to estimate the ISR was called that many times.
-            for (uint32_t i = 0; i < (duration * pulses_per_second); i++) {
-                Wheel_Encoder::isr_handler(&l_encoder);
-                Wheel_Encoder::isr_handler(&r_encoder);
-            }
-
-            // Confirm the pulse count after moving for the specified duration.
-            TEST_ASSERT_EQUAL(duration * pulses_per_second, d_train.get_pulses(l_encoder));
-            TEST_ASSERT_EQUAL(duration * pulses_per_second, d_train.get_pulses(r_encoder));
-        }
-        return;
-}
-//  ============================================================
-
-
-
-/*
-    ============================================================
-    Confirm that the drive train performs the loop_tick().
-    ============================================================
-*/
-void test_drive_train_task(Drive_Train &d_train) {
-    Wheel_Encoder &l_encoder = d_train.get_left_encoder();
-    Wheel_Encoder &r_encoder = d_train.get_right_encoder();
-    
-    // Reset the pulse counts.
-    l_encoder.reset_count();
-    r_encoder.reset_count();
-    TEST_ASSERT_EQUAL(0, d_train.get_pulses(l_encoder));
-    TEST_ASSERT_EQUAL(0, d_train.get_pulses(r_encoder));
-
-    // Simulate the wheel encoders pulsed 20 times.
-    l_encoder.set_pulse_count(20);
-    r_encoder.set_pulse_count(20);
-    
-    // Confirm the robot is moving.
-    d_train.loop_tick();
-    TEST_ASSERT_EQUAL(d_train.get_last_l_pulses(), d_train.get_pulses(l_encoder));
-    TEST_ASSERT_EQUAL(d_train.get_last_r_pulses(), d_train.get_pulses(r_encoder));
-    TEST_ASSERT_EQUAL(false, d_train.stopped_recently);
-
-    // Confirm the robot stopped moving.
-    d_train.loop_tick();
-    TEST_ASSERT_EQUAL(0, d_train.get_pulses(l_encoder));
-    TEST_ASSERT_EQUAL(0, d_train.get_pulses(r_encoder));
-    TEST_ASSERT_EQUAL(0, d_train.get_last_l_pulses());
-    TEST_ASSERT_EQUAL(0, d_train.get_last_r_pulses());
-    TEST_ASSERT_EQUAL(0.0, d_train.get_l_distance());
-    TEST_ASSERT_EQUAL(0.0, d_train.get_r_distance());
-    TEST_ASSERT_EQUAL(true, d_train.stopped_recently);
-
-    return;
-}
-//  ============================================================
-
-
-
-/*
-    ============================================================
-    Test the drive train class and its functions.
-    ============================================================
-*/
-void test_drive_train_functions(void) {
     // Create the drive train object.
-    Drive_Train d_train = create_drive_train();
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
 
-    // Confirm that the drive train is initialized and its task is created.
-    test_drive_train_initialization(d_train);
+    // Verify the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
 
-    // Confirm the robot moved forward.
-    // expected motor duties in order: fl_1, fl_2, fr_1, fr_2, bl_1, bl_2, br_1, br_2
-    expected_duties[0] = 255;
-    expected_duties[1] = 0.0;
-    expected_duties[2] = 255;
-    expected_duties[3] = 0.0;
-    expected_duties[4] = 255;
-    expected_duties[5] = 0.0;
-    expected_duties[6] = 255;
-    expected_duties[7] = 0.0;
-    test_drive_train_movement(d_train, movement::FORWARD, 255, 3, 30, 8);
-
-    // Confirm the robot moved backward.
-    // expected motor duties in order: fl_1, fl_2, fr_1, fr_2, bl_1, bl_2, br_1, br_2
-    expected_duties[0] = 0.0;
-    expected_duties[1] = 200;
-    expected_duties[2] = 0.0;
-    expected_duties[3] = 200;
-    expected_duties[4] = 0.0;
-    expected_duties[5] = 200;
-    expected_duties[6] = 0.0;
-    expected_duties[7] = 200;
-    test_drive_train_movement(d_train, movement::BACKWARD, 200, 3, 25, 16);
-
-    // Confirm the robot turned left.
-    // expected motor duties in order: fl_1, fl_2, fr_1, fr_2, bl_1, bl_2, br_1, br_2
-    expected_duties[0] = 0.0;
-    expected_duties[1] = 225;
-    expected_duties[2] = 225;
-    expected_duties[3] = 0.0;
-    expected_duties[4] = 0.0;
-    expected_duties[5] = 225;
-    expected_duties[6] = 225;
-    expected_duties[7] = 0.0;
-    test_drive_train_movement(d_train, movement::LEFT, 225, 3, 28, 24);
-
-    // Confirm the robot turned right.
-    // expected motor duties in order: fl_1, fl_2, fr_1, fr_2, bl_1, bl_2, br_1, br_2
-    expected_duties[0] = 210;
-    expected_duties[1] = 0.0;
-    expected_duties[2] = 0.0;
-    expected_duties[3] = 210;
-    expected_duties[4] = 210;
-    expected_duties[5] = 0.0;
-    expected_duties[6] = 0.0;
-    expected_duties[7] = 210;
-    test_drive_train_movement(d_train, movement::RIGHT, 210, 3, 27, 32);
-
-    // Confirm the robot stopped.
-    // expected motor duties in order: fl_1, fl_2, fr_1, fr_2, bl_1, bl_2, br_1, br_2
-    expected_duties[0] = 0.0;
-    expected_duties[1] = 0.0;
-    expected_duties[2] = 0.0;
-    expected_duties[3] = 0.0;
-    expected_duties[4] = 0.0;
-    expected_duties[5] = 0.0;
-    expected_duties[6] = 0.0;
-    expected_duties[7] = 0.0;
-    test_drive_train_movement(d_train, movement::STOP, 0, 3, 100, 40);
-
-    // Confirm the drive train task works.
-    test_drive_train_task(d_train);
+    // Verify the drive train is initialized in the STOP state.
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
 
     return;
 }
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the Motor_Driver's constructor fails
+    initialization when initializing the Front Motor Driver.
+    ============================================================
+*/
+void test_drive_train_initialization_front_driver_failure(void) {
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify the wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Set the front left motor to have an error.
+    gpio_reset_pin_fake.return_val = ESP_FAIL;
+    Motor fl_motor(fl_config);
+
+    // Verify that all motors besides the front left motor are initialized.
+    TEST_ASSERT_FALSE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers besides the front motor driver are initialized.
+    TEST_ASSERT_FALSE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is not initialized.
+    TEST_ASSERT_FALSE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+    // Verify the drive train is initialized in the STOP state.
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the Motor_Driver's constructor fails
+    initialization when initializing the Rear Motor Driver.
+    ============================================================
+*/
+void test_drive_train_initialization_rear_driver_failure(void) {
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that the wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+
+    // Set the rear right motor to have an error.
+    gpio_set_direction_fake.return_val = ESP_FAIL;
+    Motor rr_motor(rr_config);
+
+
+    // Verify that all motors besides the rear right motor are initialized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_FALSE(rr_motor.is_initialized());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers besides the rear motor driver are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_FALSE(rm_driver.is_initialized());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is not initialized.
+    TEST_ASSERT_FALSE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+    // Verify the drive train is initialized in the STOP state.
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the Motor_Driver's constructor fails
+    initialization when initializing the Left Wheel Encoder.
+    ============================================================
+*/
+void test_drive_train_initialization_left_encoder_failure(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify the motors are initialized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify the motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Set the left wheel encoder to have an error.
+    gpio_reset_pin_fake.return_val = ESP_FAIL;
+    Wheel_Encoder lw_encoder(lwe_config);
+
+    // Verify that all wheel encoders besides the left wheel encoder are initialized.
+    TEST_ASSERT_FALSE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is not initialized.
+    TEST_ASSERT_FALSE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+    // Verify the drive train is initialized in the STOP state.
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the Motor_Driver's constructor fails
+    initialization when initializing the Right Wheel Encoder.
+    ============================================================
+*/
+void test_drive_train_initialization_right_encoder_failure(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify the motors are initialized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify the motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+
+    // Set the right encoder to have an error.
+    gpio_set_direction_fake.return_val = ESP_FAIL;
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders besides the right wheel encoder are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(rw_encoder.is_initialized());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is not initialized.
+    TEST_ASSERT_FALSE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+    // Verify the drive train is initialized in the STOP state.
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the Drive_Train's commands are locked out when the
+    initialization fails.
+    ============================================================
+*/
+void test_drive_train_commands_lockout_after_initialization(void) {
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Set the front left motor to have an error.
+    gpio_reset_pin_fake.return_val = ESP_FAIL;
+    Motor fl_motor(fl_config);
+
+    // Verify that all motors besides the front left motor are initialized.
+    TEST_ASSERT_FALSE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers besides the front motor driver are intiialized.
+    TEST_ASSERT_FALSE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is not initialized.
+    TEST_ASSERT_FALSE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+    TEST_ASSERT_EQUAL(9, gpio_reset_pin_fake.call_count);
+    TEST_ASSERT_EQUAL(8, gpio_set_direction_fake.call_count);
+    TEST_ASSERT_EQUAL(6, ledc_channel_config_fake.call_count);
+
+    // Verify the drive train commands are locked out.
+    d_train.set_left_duty_cycle(100);
+    d_train.set_right_duty_cycle(100);
+
+    TEST_ASSERT_EQUAL_UINT8(0, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(0, d_train.get_right_duty_cycle());
+
+    d_train.forward();
+    d_train.backward();
+    d_train.left_turn();
+    d_train.right_turn();
+    d_train.stop();
+    d_train.reset_encoder_counts();
+    d_train.get_left_distance();
+    d_train.get_right_distance();
+
+    TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(0, ledc_update_duty_fake.call_count);
+
+    // Verify the drive train is set to the STOP state.
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the Drive_Train's commands are locked out when a
+    failure occurs.
+    ============================================================
+*/
+void test_drive_train_commands_lockout_after_failure(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+    // Verify that the drive train commands are locked out when an error occurs.
+    d_train.set_left_duty_cycle(100);
+    d_train.set_right_duty_cycle(100);
+
+    TEST_ASSERT_EQUAL_UINT8(100, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(100, d_train.get_right_duty_cycle());
+
+    ledc_set_duty_fake.return_val = ESP_FAIL;
+
+    d_train.forward();
+    d_train.backward();
+    d_train.left_turn();
+    d_train.right_turn();
+    d_train.stop();
+    d_train.reset_encoder_counts();
+
+    TEST_ASSERT_TRUE(d_train.is_faulted());
+
+    TEST_ASSERT_EQUAL(33, ledc_set_duty_fake.call_count);
+    TEST_ASSERT_EQUAL(22, ledc_update_duty_fake.call_count);
+
+    // Verify the drive train is set to the STOP state.
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the left and right PWM duty cycles are
+    configurable in drive train.
+    ============================================================
+*/
+void test_drive_train_set_duty_cycles(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+    // Verify the drive train's PWM duty cycles updated.
+    d_train.set_left_duty_cycle(0);
+    d_train.set_right_duty_cycle(255);
+    TEST_ASSERT_EQUAL_UINT8(0, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(255, d_train.get_right_duty_cycle());
+
+    d_train.set_left_duty_cycle(1);
+    d_train.set_right_duty_cycle(254);
+    TEST_ASSERT_EQUAL_UINT8(1, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(254, d_train.get_right_duty_cycle());
+
+    d_train.set_left_duty_cycle(150);
+    d_train.set_right_duty_cycle(150);
+    TEST_ASSERT_EQUAL_UINT8(150, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(150, d_train.get_right_duty_cycle());
+
+    d_train.set_left_duty_cycle(254);
+    d_train.set_right_duty_cycle(1);
+    TEST_ASSERT_EQUAL_UINT8(254, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(1, d_train.get_right_duty_cycle());
+
+    d_train.set_left_duty_cycle(255);
+    d_train.set_right_duty_cycle(0);
+    TEST_ASSERT_EQUAL_UINT8(255, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(0, d_train.get_right_duty_cycle());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can move forward.
+    ============================================================
+*/
+void test_drive_train_forward(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+    // Verify the drive train moved forward.
+    d_train.set_left_duty_cycle(100);
+    d_train.set_right_duty_cycle(100);
+
+    TEST_ASSERT_EQUAL_UINT8(100, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(100, d_train.get_right_duty_cycle());
+
+    d_train.forward();
+
+    TEST_ASSERT_EQUAL(Train_Command::FORWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can move backward.
+    ============================================================
+*/
+void test_drive_train_backward(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+    // Verify the drive train moved backward.
+    d_train.set_left_duty_cycle(100);
+    d_train.set_right_duty_cycle(100);
+
+    TEST_ASSERT_EQUAL_UINT8(100, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(100, d_train.get_right_duty_cycle());
+
+    d_train.backward();
+
+    TEST_ASSERT_EQUAL(Train_Command::BACKWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can turn left.
+    ============================================================
+*/
+void test_drive_train_left_turn(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+    // Verify the drive train turned left.
+    d_train.set_left_duty_cycle(100);
+    d_train.set_right_duty_cycle(100);
+
+    TEST_ASSERT_EQUAL_UINT8(100, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(100, d_train.get_right_duty_cycle());
+
+    d_train.left_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::LEFT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can turn right.
+    ============================================================
+*/
+void test_drive_train_right_turn(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+    // Verify the drive train turned right.
+    d_train.set_left_duty_cycle(100);
+    d_train.set_right_duty_cycle(100);
+
+    TEST_ASSERT_EQUAL_UINT8(100, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(100, d_train.get_right_duty_cycle());
+
+    d_train.right_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::RIGHT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can stop.
+    ============================================================
+*/
+void test_drive_train_stop(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+    // Verify the drive train stopped moving.
+    d_train.set_left_duty_cycle(100);
+    d_train.set_right_duty_cycle(100);
+
+    TEST_ASSERT_EQUAL_UINT8(100, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(100, d_train.get_right_duty_cycle());
+
+    d_train.stop();
+
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can move forward and then forward.
+    ============================================================
+*/
+void test_drive_train_forward_to_forward(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train moved forward.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.forward();
+
+    TEST_ASSERT_EQUAL(Train_Command::FORWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train moved forward.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.forward();
+
+    TEST_ASSERT_EQUAL(Train_Command::FORWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can move forward and then
+    backward.
+    ============================================================
+*/
+void test_drive_train_forward_to_backward(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train moved forward.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.forward();
+
+    TEST_ASSERT_EQUAL(Train_Command::FORWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train moved backward.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.backward();
+
+    TEST_ASSERT_EQUAL(Train_Command::BACKWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can move forward and then turn
+    left.
+    ============================================================
+*/
+void test_drive_train_forward_to_left_turn(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train moved forward.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.forward();
+
+    TEST_ASSERT_EQUAL(Train_Command::FORWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train turned left.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.left_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::LEFT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can move forward and then turn
+    right.
+    ============================================================
+*/
+void test_drive_train_forward_to_right_turn(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train moved forward.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.forward();
+
+    TEST_ASSERT_EQUAL(Train_Command::FORWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train turned right.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.right_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::RIGHT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can move forward and then stop.
+    ============================================================
+*/
+void test_drive_train_forward_to_stop(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train moved forward.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.forward();
+
+    TEST_ASSERT_EQUAL(Train_Command::FORWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train stopped.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.stop();
+
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can move backward and then
+    forward.
+    ============================================================
+*/
+void test_drive_train_backward_to_forward(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train moved backward.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.backward();
+
+    TEST_ASSERT_EQUAL(Train_Command::BACKWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train moved forward.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.forward();
+
+    TEST_ASSERT_EQUAL(Train_Command::FORWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can move backward and then
+    backward.
+    ============================================================
+*/
+void test_drive_train_backward_to_backward(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train moved backward.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.backward();
+
+    TEST_ASSERT_EQUAL(Train_Command::BACKWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train moved backward.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.backward();
+
+    TEST_ASSERT_EQUAL(Train_Command::BACKWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can move backward and then turn
+    left.
+    ============================================================
+*/
+void test_drive_train_backward_to_left_turn(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train moved backward.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.backward();
+
+    TEST_ASSERT_EQUAL(Train_Command::BACKWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train turned left.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.left_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::LEFT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can move backward and then turn
+    right.
+    ============================================================
+*/
+void test_drive_train_backward_to_right_turn(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train moved backward.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.backward();
+
+    TEST_ASSERT_EQUAL(Train_Command::BACKWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train turned right.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.right_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::RIGHT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can move backward and then stop.
+    ============================================================
+*/
+void test_drive_train_backward_to_stop(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train moved backward.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.backward();
+
+    TEST_ASSERT_EQUAL(Train_Command::BACKWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train stopped.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.stop();
+
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can turn left and then forward.
+    ============================================================
+*/
+void test_drive_train_left_turn_to_forward(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train turned left.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.left_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::LEFT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train moved forward.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.forward();
+
+    TEST_ASSERT_EQUAL(Train_Command::FORWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can turn left and then backward.
+    ============================================================
+*/
+void test_drive_train_left_turn_to_backward(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train turned left.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.left_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::LEFT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train moved backward.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.backward();
+
+    TEST_ASSERT_EQUAL(Train_Command::BACKWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can turn left and then turn left.
+    ============================================================
+*/
+void test_drive_train_left_turn_to_left_turn(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train turned left.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.left_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::LEFT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train turned left.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.left_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::LEFT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can turn left and then turn right.
+    ============================================================
+*/
+void test_drive_train_left_turn_to_right_turn(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train turned left.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.left_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::LEFT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train turned right.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.right_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::RIGHT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can turn left and then stop.
+    ============================================================
+*/
+void test_drive_train_left_turn_to_stop(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train turned left.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.left_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::LEFT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train stopped.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.stop();
+
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can stop and then forward.
+    ============================================================
+*/
+void test_drive_train_stop_to_forward(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train stopped.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.stop();
+
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train moved forward.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.forward();
+
+    TEST_ASSERT_EQUAL(Train_Command::FORWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can stop and then backward.
+    ============================================================
+*/
+void test_drive_train_stop_to_backward(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train stopped.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.stop();
+
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train moved backward.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.backward();
+
+    TEST_ASSERT_EQUAL(Train_Command::BACKWARD, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can stop and then turn left.
+    ============================================================
+*/
+void test_drive_train_stop_to_left_turn(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train stopped.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.stop();
+
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train turned left.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.left_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::LEFT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can stop and then turn right.
+    ============================================================
+*/
+void test_drive_train_stop_to_right_turn(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train turned left.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.stop();
+
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train turned right.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.right_turn();
+
+    TEST_ASSERT_EQUAL(Train_Command::RIGHT_TURN, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the drive train can stop and then stop.
+    ============================================================
+*/
+void test_drive_train_stop_to_stop(void) {
+    // Create the motor objects.
+    Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor fl_motor(fl_config);
+    Motor fr_motor(fr_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
+
+    // Verify that all motors are inititalized.
+    TEST_ASSERT_TRUE(fl_motor.is_initialized());
+    TEST_ASSERT_TRUE(fr_motor.is_initialized());
+    TEST_ASSERT_TRUE(rl_motor.is_initialized());
+    TEST_ASSERT_TRUE(rr_motor.is_initialized());
+    TEST_ASSERT_FALSE(fl_motor.is_faulted());
+    TEST_ASSERT_FALSE(fr_motor.is_faulted());
+    TEST_ASSERT_FALSE(rl_motor.is_faulted());
+    TEST_ASSERT_FALSE(rr_motor.is_faulted());
+
+    // Create the motor driver objects.
+    Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
+    Motor_Driver fm_driver(fmd_config);
+    Motor_Driver rm_driver(rmd_config);
+
+    // Verify that all motor drivers are initialized.
+    TEST_ASSERT_TRUE(fm_driver.is_initialized());
+    TEST_ASSERT_TRUE(rm_driver.is_initialized());
+    TEST_ASSERT_FALSE(fm_driver.is_faulted());
+    TEST_ASSERT_FALSE(rm_driver.is_faulted());
+
+    // Create the wheel encoder objects.
+    Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
+    Encoder_Config rwe_config = {"Right Wheel Encoder", GPIO_NUM_41, 80.0, 20};
+    Wheel_Encoder lw_encoder(lwe_config);
+    Wheel_Encoder rw_encoder(rwe_config);
+
+    // Verify that all wheel encoders are initialized.
+    TEST_ASSERT_TRUE(lw_encoder.is_initialized());
+    TEST_ASSERT_TRUE(rw_encoder.is_initialized());
+    TEST_ASSERT_FALSE(lw_encoder.is_faulted());
+    TEST_ASSERT_FALSE(rw_encoder.is_faulted());
+
+    // Create the drive train object.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+    Drive_Train d_train(dt_config);
+
+    // Verify that the drive train is initialized.
+    TEST_ASSERT_TRUE(d_train.is_initialized());
+    TEST_ASSERT_FALSE(d_train.is_faulted());
+
+
+    // Verify the drive train stopped.
+    d_train.set_left_duty_cycle(123);
+    d_train.set_right_duty_cycle(123);
+
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(123, d_train.get_right_duty_cycle());
+
+    d_train.stop();
+
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+
+    // Verify the drive train stopped.
+    d_train.set_left_duty_cycle(231);
+    d_train.set_right_duty_cycle(231);
+
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL_UINT8(231, d_train.get_right_duty_cycle());
+
+    d_train.stop();
+
+    TEST_ASSERT_EQUAL(Train_Command::STOP, d_train.get_train_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_front_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, d_train.get_rear_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_fd_right_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, d_train.get_rd_right_motor_command());
+
+    return;
+}
+//  ============================================================

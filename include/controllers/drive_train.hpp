@@ -12,8 +12,8 @@
     Define the class's dependencies.
     ============================================================
 */
-#include <../include/motors/motor_driver.hpp>
-#include <../include/sensors/wheel_encoder.hpp>
+#include "motors/motor_driver.hpp"
+#include "sensors/wheel_encoder.hpp"
 //  ============================================================
 
 
@@ -27,9 +27,9 @@
 struct Train_Config {
     std::string name;
     Motor_Driver Front_Driver;
-    Motor_Driver Back_Driver;
-    Wheel_Encoder *Left_Encoder;    // Must hold the original object.
-    Wheel_Encoder *Right_Encoder;   // Must hold the original object.
+    Motor_Driver Rear_Driver;
+    Wheel_Encoder &Left_Encoder;    // Must reference the original object.
+    Wheel_Encoder &Right_Encoder;   // Must reference the original object.
 };
 //  ============================================================
 
@@ -37,54 +37,86 @@ struct Train_Config {
 
 /*
     ============================================================
-    This class manages 4 motors' speed and direction.
+    Enum that stores the drive train's current state.
+    ============================================================
+*/
+enum class Train_State {
+    UNINITIALIZED,
+    READY,
+    FAULT
+};
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Enum that stores the drive train's current command.
+    ============================================================
+*/
+enum class Train_Command {
+    STOP,
+    FORWARD,
+    BACKWARD,
+    LEFT_TURN,
+    RIGHT_TURN
+};
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    This class manages the actuator output and direction of 2
+    motor drivers and sensor output of 2 wheel encoders.
     ============================================================
 */
 class Drive_Train {
     // Set these methods to public to allow access and control from outside the class.
     public:
         explicit Drive_Train(const Train_Config &train_setup);
+        ~Drive_Train() = default;
+        bool is_initialized() const;
+        bool is_faulted() const;
 
-        virtual ~Drive_Train() = default;
+        Train_Command get_train_command() const;
+        Motor_Driver_Command get_front_driver_command() const;
+        Motor_Driver_Command get_rear_driver_command() const;
+        Motor_Command get_fd_left_motor_command() const;
+        Motor_Command get_fd_right_motor_command() const;
+        Motor_Command get_rd_left_motor_command() const;
+        Motor_Command get_rd_right_motor_command() const;
 
-        virtual void change_speed(uint32_t left_speed, uint32_t right_speed);
-        virtual void move_forward();
-        virtual void move_backward();
-        virtual void turn_left();
-        virtual void turn_right();
-        virtual void brake_all();
+        void set_left_duty_cycle(uint8_t left_duty);
+        uint8_t get_left_duty_cycle() const;
 
-        void start_task();
-        void loop_tick();
+        void set_right_duty_cycle(uint8_t right_duty);
+        uint8_t get_right_duty_cycle() const;
 
-        Wheel_Encoder& get_left_encoder();
-        Wheel_Encoder& get_right_encoder();
-        uint32_t get_pulses(const Wheel_Encoder &encoder);
+        void forward();
+        void backward();
+        void left_turn();
+        void right_turn();
+        void stop();
 
-        void set_l_distance(double distance);
-        double get_l_distance();
-        void set_r_distance(double distance);
-        double get_r_distance();
+        uint32_t get_left_pulse_count() const;
+        uint32_t get_right_pulse_count() const;
+        void reset_encoder_counts();
 
-        void set_last_l_pulses(uint32_t pulses);
-        uint32_t get_last_l_pulses();
-        void set_last_r_pulses(uint32_t pulses);
-        uint32_t get_last_r_pulses();
-
-        bool stopped_recently = true;
+        double get_left_distance() const;
+        double get_right_distance() const;
 
     // Set these variables to private to prevent access and modifications from outside the class.
     private:
-        static void task_queue(void *arg);
-        void odometry_loop();
+        bool has_motor_driver_fault() const;
+        bool has_encoder_fault() const;
+        void enter_fault(const char* operation);
 
         Train_Config config;
-
-        double l_distance{};
-        double r_distance{};
-
-        uint32_t last_l_pulses = 0;
-        uint32_t last_r_pulses = 0;
+        Train_State state = Train_State::UNINITIALIZED;
+        Train_Command command = Train_Command::STOP;
+        uint8_t current_left_duty = 0;
+        uint8_t current_right_duty = 0;
 };
 //  ============================================================
 

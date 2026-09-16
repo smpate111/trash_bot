@@ -8,7 +8,7 @@
     class's methods and variables
     ============================================================
 */
-#include <../include/controllers/drive_train.hpp>
+#include "controllers/drive_train.hpp"
 //  ============================================================
 
 
@@ -20,92 +20,192 @@
     ============================================================
 */
 Drive_Train::Drive_Train(const Train_Config &train_setup) : config(train_setup) {
-    ESP_LOGI(config.name.c_str(), "Initialized drive train.");
-}
-//  ============================================================
-
-
-/*
-    ============================================================
-    Spawn the task with a stack size and priority ranking.
-    ============================================================
-*/
-void Drive_Train::start_task() {
-    xTaskCreate(task_queue, "Odometry_Task", 4096, this, 4, nullptr);
-    return;
-}
-//  ============================================================
-
-
-/*
-    ============================================================
-    Instantiates the drive train to access member variables.
-    ============================================================
-*/
-void Drive_Train::task_queue(void *arg) {
-    Drive_Train *instance = static_cast<Drive_Train*>(arg);
-    instance->odometry_loop();
-    return;
-}
-//  ============================================================
-
-
-/*
-    ============================================================
-    An infinite loop that processes the odometry task and
-    executes the robot's movement.
-    ============================================================
-*/
-void Drive_Train::odometry_loop() {
-    while (true) {
-        loop_tick();
+    if (config.Front_Driver.is_faulted() == true) {
+        ESP_LOGW(config.name.c_str(), "Failed to initialize drive train. The Front Motor Driver faulted.");
+        state = Train_State::FAULT;
+        return;
     }
-
-    return;
-}
-//  ============================================================
-
-
-/*
-    ============================================================
-    This tick function gets executed for every iteration in the
-    infinite while loop above because we want to test the logic
-    without having to access odometry_loop() and get stuck in
-    that loop.
-    ============================================================
-*/
-void Drive_Train::loop_tick() {
-    // Retrieve the pulse counts.
-    Wheel_Encoder &l_encoder = get_left_encoder();
-    Wheel_Encoder &r_encoder = get_right_encoder();
-    uint32_t l_pulses = get_pulses(l_encoder);
-    uint32_t r_pulses = get_pulses(r_encoder);
-    set_l_distance(l_encoder.calculate_distance());
-    set_r_distance(r_encoder.calculate_distance());
+    else if (config.Front_Driver.is_initialized() == false) {
+        ESP_LOGW(config.name.c_str(), "Failed to initialize the Front Motor Driver.");
+        return;
+    }
     
-    // Record distance and pulse count while robot is moving.
-    if ((get_last_l_pulses() != l_pulses) || (get_last_r_pulses() != r_pulses)) {
-        ESP_LOGI("Odometry_Task", "Distance: %0.4fmm.", (get_l_distance() + get_r_distance()) / 2);
 
-        set_last_l_pulses(l_pulses);
-        set_last_r_pulses(r_pulses);
-        stopped_recently = false;
+    if (config.Rear_Driver.is_faulted() == true) {
+        ESP_LOGW(config.name.c_str(), "Failed to initialize drive train. The Rear Motor Driver faulted.");
+        state = Train_State::FAULT;
+        return;
+    }
+    else if (config.Rear_Driver.is_initialized() == false) {
+        ESP_LOGW(config.name.c_str(), "Failed to initialize the Rear Motor Driver.");
+        return;
     }
 
-    // Record the total distance traveled when the robot stops moving.
-    else if (stopped_recently == false) {
-        ESP_LOGI("Odometry_Task", "Robot idle. Final Distance: %0.4fmm.", (get_l_distance() + get_r_distance()) / 2);
-
-        l_encoder.reset_count();
-        r_encoder.reset_count();
-        set_last_l_pulses(0);
-        set_last_r_pulses(0);
-        set_l_distance(0.0);
-        set_r_distance(0.0);
-        stopped_recently = true;
+    if (config.Left_Encoder.is_faulted() == true) {
+        ESP_LOGW(config.name.c_str(), "Failed to initialize drive train. The Left Wheel Encoder faulted.");
+        state = Train_State::FAULT;
+        return;
+    }
+    else if (config.Left_Encoder.is_initialized() == false) {
+        ESP_LOGW(config.name.c_str(), "Failed to initialize the Left Wheel Encoder.");
+        return;
     }
 
-    vTaskDelay(pdMS_TO_TICKS(100));
+
+    if (config.Right_Encoder.is_faulted() == true) {
+        ESP_LOGW(config.name.c_str(), "Failed to initialize drive train. The Right Wheel Encoder faulted.");
+        state = Train_State::FAULT;
+        return;
+    }
+    else if (config.Right_Encoder.is_initialized() == false) {
+        ESP_LOGW(config.name.c_str(), "Failed to initialize the Right Wheel Encoder.");
+        return;
+    }
+
+    ESP_LOGI(
+            config.name.c_str(),
+            "Initialized drive train with current left motors' PWM output to [%u] and current right motors' PWM output to [%u].",
+            current_left_duty,
+            current_right_duty
+        );
+    state = Train_State::READY;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieves the initialized boolean.
+    ============================================================
+*/
+bool Drive_Train::is_initialized() const {
+    return state == Train_State::READY;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieves the faulted boolean.
+    ============================================================
+*/
+bool Drive_Train::is_faulted() const {
+    return state == Train_State::FAULT;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Get the drive train's current command.
+    ============================================================
+*/
+Train_Command Drive_Train::get_train_command() const {
+    return command;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Get the front motor driver's current command.
+    ============================================================
+*/
+Motor_Driver_Command Drive_Train::get_front_driver_command() const {
+    return config.Front_Driver.get_driver_command();
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Get the rear motor driver's current command.
+    ============================================================
+*/
+Motor_Driver_Command Drive_Train::get_rear_driver_command() const {
+    return config.Rear_Driver.get_driver_command();
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Get the front left motor's current command.
+    ============================================================
+*/
+Motor_Command Drive_Train::get_fd_left_motor_command() const {
+    return config.Front_Driver.get_left_motor_command();
+}
+//  ============================================================
+
+/*
+    ============================================================
+    Get the front right motor's current command.
+    ============================================================
+*/
+Motor_Command Drive_Train::get_fd_right_motor_command() const {
+    return config.Front_Driver.get_right_motor_command();
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Get the rear left motor's current command.
+    ============================================================
+*/
+Motor_Command Drive_Train::get_rd_left_motor_command() const {
+    return config.Rear_Driver.get_left_motor_command();
+}
+//  ============================================================
+
+/*
+    ============================================================
+    Get the rear right motor's current command.
+    ============================================================
+*/
+Motor_Command Drive_Train::get_rd_right_motor_command() const {
+    return config.Rear_Driver.get_right_motor_command();
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Record the left motors' PWM output between 0 to 255.
+
+    NOTE: Callers must limit the calculated duty value before
+    converting it to uint8_t. An out-of-range integer converted
+    to uint8_t is narrowed to the destination type rather than
+    being rejected automatically.
+    ============================================================
+*/
+void Drive_Train::set_left_duty_cycle(uint8_t left_duty) {
+    if (state == Train_State::UNINITIALIZED) {
+        ESP_LOGW(config.name.c_str(), "Drive train is not initialized. Ignoring set_left_duty_cycle().");
+        return;
+    }
+    else if (state == Train_State::FAULT) {
+        ESP_LOGW(config.name.c_str(), "Drive train is in faulted state. Ignoring set_left_duty_cycle().");
+        return;
+    }
+
+    ESP_LOGI(config.name.c_str(), "Making drive train adjust left motors' PWM output to: [%u].", left_duty);
+    
+    config.Front_Driver.set_left_duty_cycle(left_duty);
+    if (has_motor_driver_fault() == true) {
+        enter_fault("Front_Driver: set_left_duty_cycle()");
+        return;
+    }
+    
+    config.Rear_Driver.set_left_duty_cycle(left_duty);
+    if (has_motor_driver_fault() == true) {
+        enter_fault("Rear_Driver: set_left_duty_cycle()");
+        return;
+    }
+    
+    current_left_duty = left_duty;
+
     return;
 }
 //  ============================================================
@@ -113,14 +213,51 @@ void Drive_Train::loop_tick() {
 
 /*
     ============================================================
-    Adjusts the speed for all 4 motors.
+    Retrieve the left motors' PWM output.
     ============================================================
 */
-void Drive_Train::change_speed(uint32_t left_speed, uint32_t right_speed) {
-    ESP_LOGI(config.name.c_str(), "Adjusting the train's speed.");
+uint8_t Drive_Train::get_left_duty_cycle() const {
+    return current_left_duty;
+}
+//  ============================================================
 
-    config.Front_Driver.adjust_speed(left_speed, right_speed);
-    config.Back_Driver.adjust_speed(left_speed, right_speed);
+
+/*
+    ============================================================
+    Record the right motors' PWM output between 0 to 255.
+
+    NOTE: Callers must limit the calculated duty value before
+    converting it to uint8_t. An out-of-range integer converted
+    to uint8_t is narrowed to the destination type rather than
+    being rejected automatically.
+    ============================================================
+*/
+void Drive_Train::set_right_duty_cycle(uint8_t right_duty) {
+    if (state == Train_State::UNINITIALIZED) {
+        ESP_LOGW(config.name.c_str(), "Drive train is not initialized. Ignoring set_right_duty_cycle().");
+        return;
+    }
+    else if (state == Train_State::FAULT) {
+        ESP_LOGW(config.name.c_str(), "Drive train is in faulted state. Ignoring set_right_duty_cycle().");
+        return;
+    }
+
+    ESP_LOGI(config.name.c_str(), "Making drive train adjust right motors' PWM output to: [%u].", right_duty);
+    
+    config.Front_Driver.set_right_duty_cycle(right_duty);
+    if (has_motor_driver_fault() == true) {
+        enter_fault("Front_Driver: set_right_duty_cycle()");
+        return;
+    }
+    
+    config.Rear_Driver.set_right_duty_cycle(right_duty);
+    if (has_motor_driver_fault() == true) {
+        enter_fault("Rear_Driver: set_right_duty_cycle()");
+        return;
+    }
+    
+    current_right_duty = right_duty;
+
     return;
 }
 //  ============================================================
@@ -128,14 +265,46 @@ void Drive_Train::change_speed(uint32_t left_speed, uint32_t right_speed) {
 
 /*
     ============================================================
-    Drives all motors forward.
+    Retrieve the right motors' PWM output.
     ============================================================
 */
-void Drive_Train::move_forward() {
-    ESP_LOGI(config.name.c_str(), "Making train move forward.");
+uint8_t Drive_Train::get_right_duty_cycle() const {
+    return current_right_duty;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Commands front and rear motor drivers to move forward.
+    ============================================================
+*/
+void Drive_Train::forward() {
+    if (state == Train_State::UNINITIALIZED) {
+        ESP_LOGW(config.name.c_str(), "Drive train is not initialized. Ignoring forward().");
+        return;
+    }
+    else if (state == Train_State::FAULT) {
+        ESP_LOGW(config.name.c_str(), "Drive train is in faulted state. Ignoring forward().");
+        return;
+    }
+
+    ESP_LOGI(config.name.c_str(), "Making drive train move forward.");
 
     config.Front_Driver.forward();
-    config.Back_Driver.forward();
+    if (has_motor_driver_fault() == true) {
+        enter_fault("Front_Driver: forward()");
+        return;
+    }
+
+    config.Rear_Driver.forward();
+    if (has_motor_driver_fault() == true) {
+        enter_fault("Rear_Driver: forward()");
+        return;
+    }
+
+    command = Train_Command::FORWARD;
+
     return;
 }
 //  ============================================================
@@ -143,14 +312,35 @@ void Drive_Train::move_forward() {
 
 /*
     ============================================================
-    Drives all motors backward.
+    Commands front and rear motor drivers to move backward.
     ============================================================
 */
-void Drive_Train::move_backward() {
-    ESP_LOGI(config.name.c_str(), "Making train move backward.");
+void Drive_Train::backward() {
+    if (state == Train_State::UNINITIALIZED) {
+        ESP_LOGW(config.name.c_str(), "Drive train is not initialized. Ignoring backward().");
+        return;
+    }
+    else if (state == Train_State::FAULT) {
+        ESP_LOGW(config.name.c_str(), "Drive train is in faulted state. Ignoring backward().");
+        return;
+    }
+
+    ESP_LOGI(config.name.c_str(), "Making drive train move backward.");
 
     config.Front_Driver.backward();
-    config.Back_Driver.backward();
+    if (has_motor_driver_fault() == true) {
+        enter_fault("Front_Driver: backward()");
+        return;
+    }
+
+    config.Rear_Driver.backward();
+    if (has_motor_driver_fault() == true) {
+        enter_fault("Rear_Driver: backward()");
+        return;
+    }
+
+    command = Train_Command::BACKWARD;
+
     return;
 }
 //  ============================================================
@@ -158,15 +348,35 @@ void Drive_Train::move_backward() {
 
 /*
     ============================================================
-    Drives the 2 left motors backward and 2 right motors forward
-    to make robot turn left.
+    Commands front and rear motor drivers to make a left turn.
     ============================================================
 */
-void Drive_Train::turn_left() {
-    ESP_LOGI(config.name.c_str(), "Making train turn left.");
+void Drive_Train::left_turn() {
+    if (state == Train_State::UNINITIALIZED) {
+        ESP_LOGW(config.name.c_str(), "Drive train is not initialized. Ignoring left_turn().");
+        return;
+    }
+    else if (state == Train_State::FAULT) {
+        ESP_LOGW(config.name.c_str(), "Drive train is in faulted state. Ignoring left_turn().");
+        return;
+    }
 
-    config.Front_Driver.left();
-    config.Back_Driver.left();
+    ESP_LOGI(config.name.c_str(), "Making drive train turn left.");
+
+    config.Front_Driver.left_turn();
+    if (has_motor_driver_fault() == true) {
+        enter_fault("Front_Driver: left_turn()");
+        return;
+    }
+
+    config.Rear_Driver.left_turn();
+    if (has_motor_driver_fault() == true) {
+        enter_fault("Rear_Driver: left_turn()");
+        return;
+    }
+
+    command = Train_Command::LEFT_TURN;
+
     return;
 }
 //  ============================================================
@@ -174,15 +384,35 @@ void Drive_Train::turn_left() {
 
 /*
     ============================================================
-    Drives the 2 left motors forward and 2 right motors backward
-    to make robot turn right.
+    Commands front and rear motor drivers to make a right turn.
     ============================================================
 */
-void Drive_Train::turn_right() {
-    ESP_LOGI(config.name.c_str(), "Making train turn right.");
+void Drive_Train::right_turn() {
+    if (state == Train_State::UNINITIALIZED) {
+        ESP_LOGW(config.name.c_str(), "Drive train is not initialized. Ignoring right_turn().");
+        return;
+    }
+    else if (state == Train_State::FAULT) {
+        ESP_LOGW(config.name.c_str(), "Drive train is in faulted state. Ignoring right_turn().");
+        return;
+    }
 
-    config.Front_Driver.right();
-    config.Back_Driver.right();
+    ESP_LOGI(config.name.c_str(), "Making drive train turn right.");
+
+    config.Front_Driver.right_turn();
+    if (has_motor_driver_fault() == true) {
+        enter_fault("Front_Driver: right_turn()");
+        return;
+    }
+
+    config.Rear_Driver.right_turn();
+    if (has_motor_driver_fault() == true) {
+        enter_fault("Rear_Driver: right_turn()");
+        return;
+    }
+
+    command = Train_Command::RIGHT_TURN;
+
     return;
 }
 //  ============================================================
@@ -190,14 +420,25 @@ void Drive_Train::turn_right() {
 
 /*
     ============================================================
-    Stops all motors from spinning.
+    Commands front and rear motor drivers to stop moving.
     ============================================================
 */
-void Drive_Train::brake_all() {
-    ESP_LOGI(config.name.c_str(), "Making train stop.");
+void Drive_Train::stop() {
+    if (state == Train_State::UNINITIALIZED) {
+        ESP_LOGW(config.name.c_str(), "Drive train is not initialized. Ignoring stop().");
+        return;
+    }
 
-    config.Front_Driver.brake();
-    config.Back_Driver.brake();
+    ESP_LOGI(config.name.c_str(), "Making drive train stop.");
+
+    current_left_duty = 0;
+    current_right_duty = 0;
+
+    config.Front_Driver.stop();
+    config.Rear_Driver.stop();
+
+    command = Train_Command::STOP;
+
     return;
 }
 //  ============================================================
@@ -205,46 +446,40 @@ void Drive_Train::brake_all() {
 
 /*
     ============================================================
-    Returns the left wheel encoder object.
+    Retrieve the left wheel encoder's pulse count.
     ============================================================
 */
-Wheel_Encoder& Drive_Train::get_left_encoder() {
-    //ESP_LOGI(config.name.c_str(), "Retrieving left wheel encoder object.");
-    return *(config.Left_Encoder);  // Returning a dereferenced pointer.
+uint32_t Drive_Train::get_left_pulse_count() const {
+    return config.Left_Encoder.get_pulse_count();
 }
 //  ============================================================
 
 
 /*
     ============================================================
-    Returns the right wheel encoder object.
+    Retrieve the right wheel encoder's pulse count.
     ============================================================
 */
-Wheel_Encoder& Drive_Train::get_right_encoder() {
-    //ESP_LOGI(config.name.c_str(), "Retrieving right wheel encoder object.");
-    return *(config.Right_Encoder); // Returning a dereferenced pointer.
+uint32_t Drive_Train::get_right_pulse_count() const {
+    return config.Right_Encoder.get_pulse_count();
 }
 //  ============================================================
 
 
 /*
     ============================================================
-    Gets the wheel encoder's pulse count.
+    Resets both wheel encoders' pulse counts.
     ============================================================
 */
-uint32_t Drive_Train::get_pulses(const Wheel_Encoder &encoder) {
-    return encoder.get_pulse_count();
-}
-//  ============================================================
+void Drive_Train::reset_encoder_counts() {
+    if (state == Train_State::UNINITIALIZED) {
+        ESP_LOGW(config.name.c_str(), "Drive train is not initialized. Ignoring reset_encoder_counts().");
+        return;
+    }
 
-
-/*
-    ============================================================
-    Set the left wheel encoder's recorded distance.
-    ============================================================
-*/
-void Drive_Train::set_l_distance(double distance) {
-    l_distance = distance;
+    ESP_LOGI(config.name.c_str(), "Making drive train reset both encoders' pulse counts.");
+    config.Left_Encoder.reset_count();
+    config.Right_Encoder.reset_count();
     return;
 }
 //  ============================================================
@@ -252,77 +487,62 @@ void Drive_Train::set_l_distance(double distance) {
 
 /*
     ============================================================
-    Set the left wheel encoder's recorded distance.
+    Retrieve the left wheel encoder's calculated distance.
     ============================================================
 */
-double Drive_Train::get_l_distance() {
-    return l_distance;
+double Drive_Train::get_left_distance() const {
+    return config.Left_Encoder.calculate_distance();
 }
 //  ============================================================
 
 
 /*
     ============================================================
-    Set the right wheel encoder's recorded distance.
+    Retrieve the right wheel encoder's calculated distance.
     ============================================================
 */
-void Drive_Train::set_r_distance(double distance) {
-    r_distance = distance;
+double Drive_Train::get_right_distance() const {
+    return config.Right_Encoder.calculate_distance();
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Determine if 1 of the 2 motor drivers entered into a fault
+    state.
+    ============================================================
+*/
+bool Drive_Train::has_motor_driver_fault() const {
+    return config.Front_Driver.is_faulted() || config.Rear_Driver.is_faulted();
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Enters the drive train into a fault state if an error
+    occurs after initialization.
+    ============================================================
+*/
+void Drive_Train::enter_fault(const char* operation) {
+    ESP_LOGE(
+        config.name.c_str(),
+        "Drive train fault during: [%s]. One or more motor drivers and/or one or more wheel encoders entered FAULT. Entering fault state.",
+        operation
+    );
+
+    state = Train_State::FAULT;
+    command = Train_Command::STOP;
+    current_left_duty = 0;
+    current_right_duty = 0;
+
+    // Best-effort attempt to remove actuator output.
+    config.Front_Driver.stop();
+    config.Rear_Driver.stop();
+    config.Left_Encoder.reset_count();
+    config.Right_Encoder.reset_count();
+
     return;
-}
-//  ============================================================
-
-
-/*
-    ============================================================
-    Set the right wheel encoder's recorded distance.
-    ============================================================
-*/
-double Drive_Train::get_r_distance() {
-    return r_distance;
-}
-//  ============================================================
-
-
-/*
-    ============================================================
-    Record the left wheel encoder's last pulse count.
-    ============================================================
-*/
-void Drive_Train::set_last_l_pulses(uint32_t pulses) {
-    last_l_pulses = pulses;
-    return;
-}
-//  ============================================================
-
-/*
-    ============================================================
-    Get the left wheel encoder's last pulse count.
-    ============================================================
-*/
-uint32_t Drive_Train::get_last_l_pulses() {
-    return last_l_pulses;
-}
-//  ============================================================
-
-
-/*
-    ============================================================
-    Record the right wheel encoder's last pulse count.
-    ============================================================
-*/
-void Drive_Train::set_last_r_pulses(uint32_t pulses) {
-    last_r_pulses = pulses;
-    return;
-}
-//  ============================================================
-
-/*
-    ============================================================
-    Get the right wheel encoder's last pulse count.
-    ============================================================
-*/
-uint32_t Drive_Train::get_last_r_pulses() {
-    return last_r_pulses;
 }
 //  ============================================================

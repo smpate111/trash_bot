@@ -20,7 +20,7 @@
 7. Coordinating 2 motors.
 8. Ensuring the motor PWM duty is validated before passing it to the 2 motors.
 
-## 3. Not responsible for
+## 3. Not Responsible For
 
 `Motor_Driver` is not responsible for:
 1. Determining where the robot should move.
@@ -43,7 +43,7 @@ This component currently accepts a motor driver configuration that contains:
 2. Left Motor configuration
 3. Right Motor configuration
 
-It also accepts user-defined output values through `set_duty_cycles()` using `uint8_t` to represent the valid duty cycle range of `0-255`.
+It also accepts user-defined output values through `set_left_duty_cycle()` and `set_right_duty_cycle()` using `uint8_t` to represent the valid duty cycle range of `0-255`.
 
 ## 5. Outputs
 
@@ -72,31 +72,31 @@ The `Motor_Driver` interface only represents validating and constraining actuato
 
 The following conditions should always hold:
 
-### A. Valid actuator output
+### A. Valid Actuator Output
 `Motor_Driver` accepts only a PWM duty cycle representation within the supported hardware range of `0-255`.
 
-### B. Forward direction
+### B. Forward Direction
 A forward command must apply the commanded duty cycle to the forward control path and zero duty cycle to the reverse control path.
 
-### C. Backward direction
+### C. Backward Direction
 A backward command must apply the commanded duty cycle to the reverse control path and zero duty cycle to the forward control path.
 
-### D. Turning left
+### D. Turning Left
 A left turn command must apply the commanded duty cycle to the forward control path of the Right Motor and to the reverse control path of the Left Motor while applying a zero duty cycle to the reverse control path of the Right Motor and to the forward control path of the Left Motor.
 
-### E. Turning right
+### E. Turning Right
 A right turn command must apply the commanded duty cycle to the forward control path of the Left Motor and to the reverse control path of the Right Motor while applying a zero duty cycle to the reverse control path of the Left Motor and to the forward control path of the Right Motor.
 
-### F. Stop state
+### F. Stop State
 A stopped command must apply a commanded zero duty cycle to both control paths for both motors.
 
-### G. Safe initialization
+### G. Safe Initialization
 `Motor_Driver` must initialize with zero PWM duty on both control paths for both motors.
 
-### H. State meaning
+### H. State Meaning
 The internally stored duty cycle value represents the commanded actuator output and not a measured physical motor velocity.
 
-### I. Exclusive movement
+### I. Exclusive Movement
 `Motor_Driver` must never command non-zero duty on both directional controls paths on both motors simultaneously.
 
 ## 9. Failure Modes
@@ -143,7 +143,7 @@ No optimization decision should be made without first identifying a relevant con
 ## 13. Test Requirements
 `Motor_Driver` should be testable independently of the physical robot. At minimum, tests should cover:
 
-### A. Normal behavior
+### A. Normal Behavior
 - Initial state
 - Set valid duty cycles
 - Get commanded duty cycles
@@ -153,12 +153,14 @@ No optimization decision should be made without first identifying a relevant con
 - Right turn operation
 - Stop operation
 
-### B. Boundary behavior
-- Minimum valid output
-- Maximum valid output
-- Zero output
+### B. Boundary Behavior
+- Minimum valid duty cycle.
+- Maximum valid duty cycle.
+- Zero duty cycle.
+- Independent left/right duty-cycle commands.
+- Equal left/right duty cycles.
 
-### C. State transitions
+### C. State Transitions
 - `Forward -> Forward`
 - `Forward -> Backward`
 - `Forward -> Left Turn`
@@ -185,7 +187,7 @@ No optimization decision should be made without first identifying a relevant con
 - `Stop -> Right Turn`
 - `Stop -> Stop`
 
-### D. Direction switch maintains exclusivity
+### D. Direction Switch Maintains Exclusivity
 - `Forward @ 200:`
     - `-> Backward @ 200`
     - `Verify Left Motor channel 1 = 0`
@@ -199,11 +201,11 @@ No optimization decision should be made without first identifying a relevant con
     - `Verify Right Motor channel 1 = 200`
     - `Verify Right Motor channel 2 = 0`
 
-### E. Fault behavior
+### E. Fault Behavior
 - Invalid configuration
 - Hardware API failure
 
-### F. Safety behavior
+### F. Safety Behavior
 - `Motor_Driver` initializes in a stopped state.
 - Invalid input cannot create an unsafe actuator state.
 - Stop produces the expected electrical output.

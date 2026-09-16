@@ -14,7 +14,7 @@ How should `Motor_Driver` handle a calculated PWM duty value that exceeds its su
 
 ## Decision
 
-I chose `Option 3` and `Option 5` where I use `uint8_t` for the `Motor_Driver::set_duty_cycles()` parameter and convert the value to `255` while requiring the upstream component to constrain calculated duty values before converting them to `uint8_t`.
+I chose `Option 3` and `Option 5` where I use `uint8_t` for the `Motor_Driver::set_left_duty_cycle()` and `Motor_Driver::set_right_duty_cycle()` parameter and convert the value to `255` while requiring the upstream component to constrain calculated duty values before converting them to `uint8_t`.
 
 ## Rationale
 

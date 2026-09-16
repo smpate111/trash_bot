@@ -66,12 +66,13 @@ Wheel_Encoder::Wheel_Encoder(const Encoder_Config &encoder_setup) : config(encod
 
     ESP_LOGI(
         config.name.c_str(),
-        "Initialized wheel encoder on GPIO Pin [%d], set wheel diameter to [%0.4fmm], set # of encoder slots to [%d], and initialized ISR.",
+        "Initialized wheel encoder on GPIO Pin [%d] with pulse count set to [%u], set wheel diameter to [%0.4fmm], set # of encoder slots to [%d], and initialized ISR.",
         config.out_pin,
+        get_pulse_count(),
         config.wheel_diameter,
         config.encoder_slots
     );
-    initialized = true;
+    state = Encoder_State::READY;
 }
 //  ============================================================
 
@@ -82,7 +83,18 @@ Wheel_Encoder::Wheel_Encoder(const Encoder_Config &encoder_setup) : config(encod
     ============================================================
 */
 bool Wheel_Encoder::is_initialized() const {
-    return initialized;
+    return state == Encoder_State::READY;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieves the faulted boolean.
+    ============================================================
+*/
+bool Wheel_Encoder::is_faulted() const {
+    return state == Encoder_State::FAULT;
 }
 //  ============================================================
 
@@ -118,8 +130,12 @@ uint32_t Wheel_Encoder::get_pulse_count() const {
     ============================================================
 */
 void Wheel_Encoder::set_pulse_count(uint32_t count) {
-    if (initialized == false) {
+    if (state == Encoder_State::UNINITIALIZED) {
         ESP_LOGW(config.name.c_str(), "Wheel encoder is not initialized. Ignoring set_pulse_count().");
+        return;
+    }
+    else if (state == Encoder_State::FAULT) {
+        ESP_LOGW(config.name.c_str(), "Wheel encoder is in fault state. Ignoring set_pulse_count().");
         return;
     }
 
@@ -137,8 +153,12 @@ void Wheel_Encoder::set_pulse_count(uint32_t count) {
     ============================================================
 */
 void Wheel_Encoder::reset_count() {
-    if (initialized == false) {
+    if (state == Encoder_State::UNINITIALIZED) {
         ESP_LOGW(config.name.c_str(), "Wheel encoder is not initialized. Ignoring reset_count().");
+        return;
+    }
+    else if (state == Encoder_State::FAULT) {
+        ESP_LOGW(config.name.c_str(), "Wheel encoder is in fault state. Ignoring reset_count().");
         return;
     }
 
@@ -157,13 +177,39 @@ void Wheel_Encoder::reset_count() {
     ============================================================
 */
 double Wheel_Encoder::calculate_distance() {
-    if (initialized == false) {
+    if (state == Encoder_State::UNINITIALIZED) {
         ESP_LOGW(config.name.c_str(), "Wheel encoder is not initialized. Ignoring calculate_distance().");
         return 0.0;
     }
+    else if (state == Encoder_State::FAULT) {
+        ESP_LOGW(config.name.c_str(), "Wheel encoder is in fault state. Ignoring calculate_distance().");
+        return 0.0;
+    }
 
-    double distance = pulse_count * ((PI * config.wheel_diameter) / config.encoder_slots);
+    double distance = pulse_count.load(std::memory_order_relaxed) * ((PI * config.wheel_diameter) / config.encoder_slots);
     //ESP_LOGI(config.name.c_str(), "Distance traveled is: [%0.4fmm].", distance);
     return distance;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Enters the wheel encoder into a fault state if an error
+    occurs after initialization.
+    ============================================================
+*/
+void Wheel_Encoder::enter_fault(const char* operation, esp_err_t err) {
+    ESP_LOGE(
+        config.name.c_str(),
+        "Wheel encoder hardware failure during: [%s]. ESP error: [%s]. Entering fault state.",
+        operation,
+        esp_err_to_name(err)
+    );
+
+    state = Encoder_State::FAULT;
+    pulse_count = 0;
+
+    return;
 }
 //  ============================================================

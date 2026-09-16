@@ -77,8 +77,14 @@ Motor::Motor(const Motor_Config &motor_setup) : config(motor_setup) {
         return;
     }
 
-    ESP_LOGI(config.name.c_str(), "Initialized motor on GPIO Pins [%d] and [%d].", config.in1_pin, config.in2_pin);
-    initialized = true;
+    ESP_LOGI(
+            config.name.c_str(),
+            "Initialized motor on GPIO Pins [%d] and [%d] with motor's PWM output to [%u].",
+            config.in1_pin,
+            config.in2_pin,
+            current_duty
+        );
+    state = Motor_State::READY;
 }
 //  ============================================================
 
@@ -89,7 +95,29 @@ Motor::Motor(const Motor_Config &motor_setup) : config(motor_setup) {
     ============================================================
 */
 bool Motor::is_initialized() const {
-    return initialized;
+    return state == Motor_State::READY;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Retrieves the faulted boolean.
+    ============================================================
+*/
+bool Motor::is_faulted() const {
+    return state == Motor_State::FAULT;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Get the motor's current command.
+    ============================================================
+*/
+Motor_Command Motor::get_motor_command() const {
+    return command;
 }
 //  ============================================================
 
@@ -106,13 +134,17 @@ bool Motor::is_initialized() const {
     ============================================================
 */
 void Motor::set_duty_cycle(uint8_t duty) {
-    if (initialized == false) {
+    if (state == Motor_State::UNINITIALIZED) {
         ESP_LOGW(config.name.c_str(), "Motor is not initialized. Ignoring set_duty_cycle().");
+        return;
+    }
+    else if (state == Motor_State::FAULT) {
+        ESP_LOGW(config.name.c_str(), "Motor is in faulted state. Ignoring set_duty_cycle().");
         return;
     }
 
     current_duty = duty;
-    ESP_LOGI(config.name.c_str(), "Adjusted motor's PWM output to: [%u].", current_duty);
+    ESP_LOGI(config.name.c_str(), "Adjusting motor's PWM output to: [%u].", current_duty);
     return;
 }
 //  ============================================================
@@ -137,18 +169,42 @@ uint8_t Motor::get_duty_cycle() const {
     ============================================================
 */
 void Motor::spin_forward() {
-    if (initialized == false) {
+    if (state == Motor_State::UNINITIALIZED) {
         ESP_LOGW(config.name.c_str(), "Motor is not initialized. Ignoring spin_forward().");
+        return;
+    }
+    else if (state == Motor_State::FAULT) {
+        ESP_LOGW(config.name.c_str(), "Motor is in faulted state. Ignoring spin_forward().");
         return;
     }
 
     ESP_LOGI(config.name.c_str(), "Spinning motor forward at PWM output: [%u].", current_duty);
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, current_duty);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_1);
+    esp_err_t err = ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, current_duty);
+    if (err != ESP_OK) {
+        enter_fault("spin_forward(): ledc_set_duty(channel_1)", err);
+        return;
+    }
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, 0);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_2);
+    err = ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_1);
+    if (err != ESP_OK) {
+        enter_fault("spin_forward(): ledc_update_duty(channel_1)", err);
+        return;
+    }
+
+    err = ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, 0);
+    if (err != ESP_OK) {
+        enter_fault("spin_forward(): ledc_set_duty(channel_2)", err);
+        return;
+    }
+
+    err = ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_2);
+    if (err != ESP_OK) {
+        enter_fault("spin_forward(): ledc_update_duty(channel_2)", err);
+        return;
+    }
+
+    command = Motor_Command::FORWARD;
     return;
 }
 //  ============================================================
@@ -162,18 +218,42 @@ void Motor::spin_forward() {
     ============================================================
 */
 void Motor::spin_backward() {
-    if (initialized == false) {
+    if (state == Motor_State::UNINITIALIZED) {
         ESP_LOGW(config.name.c_str(), "Motor is not initialized. Ignoring spin_backward().");
+        return;
+    }
+    else if (state == Motor_State::FAULT) {
+        ESP_LOGW(config.name.c_str(), "Motor is in faulted state. Ignoring spin_backward().");
         return;
     }
 
     ESP_LOGI(config.name.c_str(), "Spinning motor backward at PWM output: [%u].", current_duty);
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, 0);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_1);
+    esp_err_t err = ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, 0);
+    if (err != ESP_OK) {
+        enter_fault("spin_backward(): ledc_set_duty(channel_1)", err);
+        return;
+    }
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, current_duty);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_2);
+    err = ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_1);
+    if (err != ESP_OK) {
+        enter_fault("spin_backward(): ledc_update_duty(channel_1)", err);
+        return;
+    }
+
+    err = ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, current_duty);
+    if (err != ESP_OK) {
+        enter_fault("spin_backward(): ledc_set_duty(channel_2)", err);
+        return;
+    }
+
+    err = ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_2);
+    if (err != ESP_OK) {
+        enter_fault("spin_backward(): ledc_update_duty(channel_2)", err);
+        return;
+    }
+
+    command = Motor_Command::BACKWARD;
     return;
 }
 //  ============================================================
@@ -187,19 +267,67 @@ void Motor::spin_backward() {
     ============================================================
 */
 void Motor::stop() {
-    if (initialized == false) {
+    if (state == Motor_State::UNINITIALIZED) {
         ESP_LOGW(config.name.c_str(), "Motor is not initialized. Ignoring stop().");
         return;
     }
 
     ESP_LOGI(config.name.c_str(), "Stopping motor from spinning.");
 
-    set_duty_cycle(0);
+    current_duty = 0;
     
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, current_duty);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_1);
+    esp_err_t err = ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, current_duty);
+    if (err != ESP_OK) {
+        enter_fault("stop(): ledc_set_duty(channel_1)", err);
+        return;
+    }
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, current_duty);
+    err = ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_1);
+    if (err != ESP_OK) {
+        enter_fault("stop(): ledc_update_duty(channel_1)", err);
+        return;
+    }
+
+    err = ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, current_duty);
+    if (err != ESP_OK) {
+        enter_fault("stop(): ledc_set_duty(channel_2)", err);
+        return;
+    }
+
+    err = ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_2);
+    if (err != ESP_OK) {
+        enter_fault("stop(): ledc_update_duty(channel_2)", err);
+        return;
+    }
+
+    command = Motor_Command::STOP;
+    return;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Enters the motor into a fault state if an error occurs after
+    initialization.
+    ============================================================
+*/
+void Motor::enter_fault(const char* operation, esp_err_t err) {
+    ESP_LOGE(
+        config.name.c_str(),
+        "Motor hardware failure during: [%s]. ESP error: [%s]. Entering fault state.",
+        operation,
+        esp_err_to_name(err)
+    );
+
+    state = Motor_State::FAULT;
+    command = Motor_Command::STOP;
+    current_duty = 0;
+
+    // Best-effort attempt to remove actuator output.
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_1, 0);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_1);
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.channel_2, 0);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, config.channel_2);
 
     return;

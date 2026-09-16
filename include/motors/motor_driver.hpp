@@ -16,9 +16,6 @@
 
 #include <cstdint>
 
-#include <driver/gpio.h>
-#include <driver/ledc.h>
-
 #include <esp_log.h>
 
 #include <string>
@@ -43,6 +40,36 @@ struct Driver_Config {
 
 /*
     ============================================================
+    Enum that stores the motor driver's current state.
+    ============================================================
+*/
+enum class Motor_Driver_State {
+    UNINITIALIZED,
+    READY,
+    FAULT
+};
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Enum that stores the motor driver's current command.
+    ============================================================
+*/
+enum class Motor_Driver_Command {
+    STOP,
+    FORWARD,
+    BACKWARD,
+    LEFT_TURN,
+    RIGHT_TURN
+};
+//  ============================================================
+
+
+
+/*
+    ============================================================
     This class controls the actuator output and direction of 2
     motors through GPIO and PWM signals.
     ============================================================
@@ -53,6 +80,11 @@ class Motor_Driver {
         explicit Motor_Driver(const Driver_Config &driver_setup);
         ~Motor_Driver() = default;
         bool is_initialized() const;
+        bool is_faulted() const;
+
+        Motor_Driver_Command get_driver_command() const;
+        Motor_Command get_left_motor_command() const;
+        Motor_Command get_right_motor_command() const;
 
         void set_left_duty_cycle(uint8_t left_duty);
         uint8_t get_left_duty_cycle() const;
@@ -68,8 +100,12 @@ class Motor_Driver {
 
     // Set these variables to private to prevent access and modifications from outside the class.
     private:
+        bool has_motor_fault() const;
+        void enter_fault(const char* operation);
+
         Driver_Config config;
-        bool initialized = false;
+        Motor_Driver_State state = Motor_Driver_State::UNINITIALIZED;
+        Motor_Driver_Command command = Motor_Driver_Command::STOP;
         uint8_t current_left_duty = 0;
         uint8_t current_right_duty = 0;
 };

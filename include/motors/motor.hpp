@@ -43,6 +43,34 @@ struct Motor_Config {
 
 /*
     ============================================================
+    Enum that stores the motor's current state.
+    ============================================================
+*/
+enum class Motor_State {
+    UNINITIALIZED,
+    READY,
+    FAULT
+};
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Enum that stores the motor's current command.
+    ============================================================
+*/
+enum class Motor_Command {
+    STOP,
+    FORWARD,
+    BACKWARD
+};
+//  ============================================================
+
+
+
+/*
+    ============================================================
     This class controls the actuator output and direction of a
     single motor through GPIO and PWM signals.
     ============================================================
@@ -53,6 +81,9 @@ class Motor {
         explicit Motor(const Motor_Config &motor_setup);
         ~Motor() = default;
         bool is_initialized() const;
+        bool is_faulted() const;
+
+        Motor_Command get_motor_command() const;
 
         void set_duty_cycle(uint8_t duty);
         uint8_t get_duty_cycle() const;
@@ -63,8 +94,11 @@ class Motor {
 
     // Set these variables to private to prevent access and modifications from outside the class.
     private:
+        void enter_fault(const char* operation, esp_err_t err);
+
         const Motor_Config config;
-        bool initialized = false;
+        Motor_State state = Motor_State::UNINITIALIZED;
+        Motor_Command command = Motor_Command::STOP;
         uint8_t current_duty = 0;
 };
 //  ============================================================

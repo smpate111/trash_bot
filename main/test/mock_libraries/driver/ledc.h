@@ -11,6 +11,8 @@
     ============================================================
 */
 
+#include "driver/esp_err.h"
+
 #include <stdint.h>
 
 //  ============================================================
@@ -18,10 +20,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-
-// Fake ESP error enums that are changed to integer types.
-typedef int esp_err_t;
 
 
 // Fake LEDC enums that are changed to integer types.

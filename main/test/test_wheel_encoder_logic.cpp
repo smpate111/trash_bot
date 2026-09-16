@@ -13,7 +13,7 @@
 
 #include "sensors/wheel_encoder.hpp"
 
-#include <test/mock_libraries/mock_hardware.hpp>
+#include "mock_libraries/mock_hardware.hpp"
 
 //  ============================================================
 
@@ -52,6 +52,7 @@ void test_wheel_encoder_hardware_initialization(void) {
     TEST_ASSERT_EQUAL(GPIO_NUM_1, gpio_isr_handler_add_fake.arg0_history[0]);
 
     TEST_ASSERT_TRUE(encoder.is_initialized());
+    TEST_ASSERT_FALSE(encoder.is_faulted());
     return;
 }
 //  ============================================================

@@ -2,7 +2,7 @@ if (IDF_TARGET STREQUAL "linux")
     # LINUX UNIT TESTING BUILD
     idf_component_register(
         SRCS
-            #"controllers/drive_train.cpp"
+            "controllers/drive_train.cpp"
             #"controllers/obstacle_avoidance.cpp"
             #"controllers/robot_controller.cpp"
             
@@ -20,7 +20,7 @@ if (IDF_TARGET STREQUAL "linux")
             "test/test_wheel_encoder_logic.cpp"
             #"test/test_ultrasonic_logic.cpp"
 
-            #"test/test_drive_train_logic.cpp"
+            "test/test_drive_train_logic.cpp"
             #"test/test_robot_controller_logic.cpp"
             #"test/test_obstacle_avoidance_logic.cpp"
 
@@ -37,7 +37,7 @@ else()
     # ESP32S3 BUILD
     idf_component_register(
         SRCS
-            #"controllers/drive_train.cpp"
+            "controllers/drive_train.cpp"
             #"controllers/obstacle_avoidance.cpp"
             #"controllers/robot_controller.cpp"
             

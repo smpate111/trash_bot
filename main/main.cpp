@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <string>
 
-//#include <../include/controllers/drive_train.hpp>
+#include "controllers/drive_train.hpp"
 //#include <../include/controllers/robot_controller.hpp>
 //#include <../include/controllers/obstacle_avoidance.hpp>
 
@@ -133,22 +133,22 @@ void app_main(void) {
     // Configure the motors by defining their pins and channels.
     Motor_Config fl_config = {"Front Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
     Motor_Config fr_config = {"Front Right Motor", GPIO_NUM_8, GPIO_NUM_3, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
-    Motor_Config bl_config = {"Back Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
-    Motor_Config br_config = {"Back Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
+    Motor_Config rl_config = {"Rear Left Motor", GPIO_NUM_6, GPIO_NUM_7, LEDC_CHANNEL_5, LEDC_CHANNEL_4};
+    Motor_Config rr_config = {"Rear Right Motor", GPIO_NUM_15, GPIO_NUM_16, LEDC_CHANNEL_7, LEDC_CHANNEL_6};
 
     // Initialize the motors.
     Motor fl_motor(fl_config);
     Motor fr_motor(fr_config);
-    Motor bl_motor(bl_config);
-    Motor br_motor(br_config);
+    Motor rl_motor(rl_config);
+    Motor rr_motor(rr_config);
 
     // Configure the motor drivers.
     Driver_Config fmd_config = {"Front Motor Driver", fl_motor, fr_motor};
-    Driver_Config bmd_config = {"Back Motor Driver", bl_motor, br_motor};
+    Driver_Config rmd_config = {"Rear Motor Driver", rl_motor, rr_motor};
 
     // Initialize the motor drivers.
     Motor_Driver fm_driver(fmd_config);
-    Motor_Driver bm_driver(bmd_config);
+    Motor_Driver rm_driver(rmd_config);
 
     // Configure the wheel encoders.
     Encoder_Config lwe_config = {"Left Wheel Encoder", GPIO_NUM_1, 80.0, 20};
@@ -157,6 +157,12 @@ void app_main(void) {
     // Initialize the wheel encoders.
     Wheel_Encoder lw_encoder(lwe_config);
     Wheel_Encoder rw_encoder(rwe_config);
+
+    // Configure the drive train.
+    Train_Config dt_config = {"Drive Train", fm_driver, rm_driver, lw_encoder, rw_encoder};
+
+    // Initialize the drive train.
+    Drive_Train d_train(dt_config);
 
     /*
     vTaskDelay(pdMS_TO_TICKS(2000));
@@ -187,77 +193,63 @@ void app_main(void) {
     
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    lw_encoder.reset_count();
-    rw_encoder.reset_count();
-    fm_driver.set_left_duty_cycle(255);
-    fm_driver.set_right_duty_cycle(255);
-    bm_driver.set_left_duty_cycle(255);
-    bm_driver.set_right_duty_cycle(255);
-
-    fm_driver.forward();
-    bm_driver.forward();
+    d_train.reset_encoder_counts();
+    d_train.set_left_duty_cycle(255);
+    d_train.set_right_duty_cycle(255);
+    
+    d_train.forward();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    fm_driver.stop();
-    bm_driver.stop();
-    lw_encoder.reset_count();
-    rw_encoder.reset_count();
+    d_train.stop();
+    ESP_LOGI("Main", "Left Wheel Distance traveled: [%0.4fmm].", d_train.get_left_distance());
+    ESP_LOGI("Main", "Right Wheel Distance traveled: [%0.4fmm].", d_train.get_right_distance());
+    d_train.reset_encoder_counts();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    lw_encoder.reset_count();
-    rw_encoder.reset_count();
-    fm_driver.set_left_duty_cycle(215);
-    fm_driver.set_right_duty_cycle(215);
-    bm_driver.set_left_duty_cycle(215);
-    bm_driver.set_right_duty_cycle(215);
+    d_train.reset_encoder_counts();
+    d_train.set_left_duty_cycle(215);
+    d_train.set_right_duty_cycle(215);
 
-    fm_driver.backward();
-    bm_driver.backward();
+    d_train.backward();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    fm_driver.stop();
-    bm_driver.stop();
-    lw_encoder.reset_count();
-    rw_encoder.reset_count();
+    d_train.stop();
+    ESP_LOGI("Main", "Left Wheel Distance traveled: [%0.4fmm].", d_train.get_left_distance());
+    ESP_LOGI("Main", "Right Wheel Distance traveled: [%0.4fmm].", d_train.get_right_distance());
+    d_train.reset_encoder_counts();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    lw_encoder.reset_count();
-    rw_encoder.reset_count();
-    fm_driver.set_left_duty_cycle(190);
-    fm_driver.set_right_duty_cycle(190);
-    bm_driver.set_left_duty_cycle(190);
-    bm_driver.set_right_duty_cycle(190);
+    d_train.reset_encoder_counts();
+    d_train.set_left_duty_cycle(190);
+    d_train.set_right_duty_cycle(190);
 
-    fm_driver.left_turn();
-    bm_driver.left_turn();
+    d_train.left_turn();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    fm_driver.stop();
-    bm_driver.stop();
-    lw_encoder.reset_count();
-    rw_encoder.reset_count();
+    d_train.stop();
+    ESP_LOGI("Main", "Left Wheel Distance traveled: [%0.4fmm].", d_train.get_left_distance());
+    ESP_LOGI("Main", "Right Wheel Distance traveled: [%0.4fmm].", d_train.get_right_distance());
+    d_train.reset_encoder_counts();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    fm_driver.set_left_duty_cycle(155);
-    fm_driver.set_right_duty_cycle(155);
-    bm_driver.set_left_duty_cycle(155);
-    bm_driver.set_right_duty_cycle(155);
+    d_train.reset_encoder_counts();
+    d_train.set_left_duty_cycle(155);
+    d_train.set_right_duty_cycle(155);
 
-    fm_driver.right_turn();
-    bm_driver.right_turn();
+    d_train.right_turn();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    fm_driver.stop();
-    bm_driver.stop();
-    lw_encoder.reset_count();
-    rw_encoder.reset_count();
+    d_train.stop();
+    ESP_LOGI("Main", "Left Wheel Distance traveled: [%0.4fmm].", d_train.get_left_distance());
+    ESP_LOGI("Main", "Right Wheel Distance traveled: [%0.4fmm].", d_train.get_right_distance());
+    d_train.reset_encoder_counts();
 
     vTaskDelay(pdMS_TO_TICKS(2000));
     

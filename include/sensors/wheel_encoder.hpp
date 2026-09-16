@@ -15,6 +15,7 @@
 #include <atomic>
 #include <cstdint>
 #include <driver/gpio.h>
+#include <driver/ledc.h>
 #include <esp_log.h>
 #include <string>
 //  ============================================================
@@ -39,6 +40,20 @@ struct Encoder_Config {
 
 /*
     ============================================================
+    Enum that stores the wheel encoder's current state.
+    ============================================================
+*/
+enum class Encoder_State {
+    UNINITIALIZED,
+    READY,
+    FAULT
+};
+//  ============================================================
+
+
+
+/*
+    ============================================================
     This class manages an encoder's pulse count and distance
     measurement.
     ============================================================
@@ -49,6 +64,7 @@ class Wheel_Encoder {
         explicit Wheel_Encoder(const Encoder_Config &encoder_setup);
         ~Wheel_Encoder() = default;
         bool is_initialized() const;
+        bool is_faulted() const;
 
         static void IRAM_ATTR isr_handler(void *arg);
 
@@ -62,8 +78,10 @@ class Wheel_Encoder {
 
     // Set these variables to private to prevent access and modifications from outside the class.
     private:
+        void enter_fault(const char* operation, esp_err_t err);
+
         const Encoder_Config config;
-        bool initialized = false;
+        Encoder_State state = Encoder_State::UNINITIALIZED;
         std::atomic<uint32_t> pulse_count{0};
         
 };

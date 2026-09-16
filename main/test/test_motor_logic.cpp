@@ -13,7 +13,7 @@
 
 #include "motors/motor.hpp"
 
-#include <test/mock_libraries/mock_hardware.hpp>
+#include "mock_libraries/mock_hardware.hpp"
 
 //  ============================================================
 
@@ -60,6 +60,9 @@ void test_motor_hardware_initialization(void) {
     TEST_ASSERT_EQUAL(0, ledc_channel_config_fake.arg0_history[1]->hpoint);
 
     TEST_ASSERT_TRUE(motor.is_initialized());
+    TEST_ASSERT_FALSE(motor.is_faulted());
+
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, motor.get_motor_command());
     return;
 }
 //  ============================================================
@@ -89,6 +92,8 @@ void test_motor_initialization_gpio_reset_failure(void) {
     // Confirm that the rest of the initialization process didn't happen.
     TEST_ASSERT_EQUAL(0, gpio_set_direction_fake.call_count);
     TEST_ASSERT_EQUAL(0, ledc_channel_config_fake.call_count);
+
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, motor.get_motor_command());
 
     return;
 }
@@ -122,6 +127,8 @@ void test_motor_initialization_gpio_direction_failure(void) {
     // Confirm that the rest of the initialization process didn't happen.
     TEST_ASSERT_EQUAL(0, ledc_channel_config_fake.call_count);
 
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, motor.get_motor_command());
+
     return;
 }
 //  ============================================================
@@ -153,6 +160,8 @@ void test_motor_initialization_ledc_config_failure(void) {
 
     // Verify that the constructor stopped after the first failed LEDC channel configuration.
     TEST_ASSERT_EQUAL(1, ledc_channel_config_fake.call_count);
+
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, motor.get_motor_command());
 
     return;
 }
@@ -192,6 +201,74 @@ void test_motor_commands_lockout_after_initialization_failure(void) {
     // Verify that no actuator commands have reached the hardware.
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.call_count);
     TEST_ASSERT_EQUAL(0, ledc_update_duty_fake.call_count);
+
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, motor.get_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the Motor commands are locked out when runtime
+    failure occurs.
+    ============================================================
+*/
+void test_motor_enters_fault_after_ledc_set_failure(void) {
+    // Create the motor object.
+    Motor_Config config = {"Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor motor(config);
+
+    TEST_ASSERT_TRUE(motor.is_initialized());
+    TEST_ASSERT_EQUAL(2, gpio_reset_pin_fake.call_count);
+    TEST_ASSERT_EQUAL(2, gpio_set_direction_fake.call_count);
+    TEST_ASSERT_EQUAL(2, ledc_channel_config_fake.call_count);
+
+    motor.set_duty_cycle(100);
+
+    ledc_set_duty_fake.return_val = ESP_FAIL;
+    motor.spin_forward();
+
+    TEST_ASSERT_TRUE(motor.is_faulted());
+    TEST_ASSERT_FALSE(motor.is_initialized());
+    TEST_ASSERT_EQUAL(0, motor.get_duty_cycle());
+
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, motor.get_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the Motor commands are locked out when runtime
+    failure occurs.
+    ============================================================
+*/
+void test_motor_enters_fault_after_ledc_update_failure(void) {
+    // Create the motor object.
+    Motor_Config config = {"Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor motor(config);
+
+    TEST_ASSERT_TRUE(motor.is_initialized());
+    TEST_ASSERT_EQUAL(2, gpio_reset_pin_fake.call_count);
+    TEST_ASSERT_EQUAL(2, gpio_set_direction_fake.call_count);
+    TEST_ASSERT_EQUAL(2, ledc_channel_config_fake.call_count);
+
+    motor.set_duty_cycle(100);
+
+    ledc_update_duty_fake.return_val = ESP_FAIL;
+    motor.spin_backward();
+
+    TEST_ASSERT_TRUE(motor.is_faulted());
+    TEST_ASSERT_FALSE(motor.is_initialized());
+    TEST_ASSERT_EQUAL(0, motor.get_duty_cycle());
+
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, motor.get_motor_command());
 
     return;
 }
@@ -260,6 +337,8 @@ void test_motor_forward(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
 
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, motor.get_motor_command());
+
     return;
 }
 //  ============================================================
@@ -295,6 +374,8 @@ void test_motor_backward(void) {
     TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[1]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
 
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, motor.get_motor_command());
+
     return;
 }
 //  ============================================================
@@ -328,6 +409,8 @@ void test_motor_stop(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[1]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
+
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, motor.get_motor_command());
 
     return;
 }
@@ -365,6 +448,8 @@ void test_motor_forward_to_forward(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
 
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, motor.get_motor_command());
+
 
     // Forward
     motor.set_duty_cycle(231);
@@ -384,6 +469,8 @@ void test_motor_forward_to_forward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[3]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[3]);
+
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, motor.get_motor_command());
 
     return;
 }
@@ -421,6 +508,8 @@ void test_motor_forward_to_backward(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
 
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, motor.get_motor_command());
+
 
     // Backward
     motor.set_duty_cycle(123);
@@ -440,6 +529,8 @@ void test_motor_forward_to_backward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[3]);
     TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[3]);
+
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, motor.get_motor_command());
 
     return;
 }
@@ -477,6 +568,8 @@ void test_motor_forward_to_stop(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
 
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, motor.get_motor_command());
+
 
     // Stop
     motor.stop();
@@ -495,6 +588,8 @@ void test_motor_forward_to_stop(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[3]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[3]);
+
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, motor.get_motor_command());
 
     return;
 }
@@ -532,6 +627,8 @@ void test_motor_backward_to_forward(void) {
     TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[1]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
 
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, motor.get_motor_command());
+
 
     // Forward
     motor.set_duty_cycle(231);
@@ -551,6 +648,8 @@ void test_motor_backward_to_forward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[3]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[3]);
+
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, motor.get_motor_command());
 
     return;
 }
@@ -588,6 +687,8 @@ void test_motor_backward_to_backward(void) {
     TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[1]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
 
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, motor.get_motor_command());
+
 
     // Backward
     motor.set_duty_cycle(123);
@@ -607,6 +708,8 @@ void test_motor_backward_to_backward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[3]);
     TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[3]);
+
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, motor.get_motor_command());
 
     return;
 }
@@ -644,6 +747,8 @@ void test_motor_backward_to_stop(void) {
     TEST_ASSERT_EQUAL(100, ledc_set_duty_fake.arg2_history[1]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
 
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, motor.get_motor_command());
+
 
     // Stop
     motor.stop();
@@ -662,6 +767,8 @@ void test_motor_backward_to_stop(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[3]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[3]);
+
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, motor.get_motor_command());
 
     return;
 }
@@ -698,6 +805,8 @@ void test_motor_stop_to_forward(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
 
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, motor.get_motor_command());
+
 
     // Forward
     motor.set_duty_cycle(231);
@@ -717,6 +826,8 @@ void test_motor_stop_to_forward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[3]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[3]);
+
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, motor.get_motor_command());
 
     return;
 }
@@ -753,6 +864,8 @@ void test_motor_stop_to_backward(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
 
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, motor.get_motor_command());
+
 
     // Backward
     motor.set_duty_cycle(123);
@@ -772,6 +885,8 @@ void test_motor_stop_to_backward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[3]);
     TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[3]);
+
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, motor.get_motor_command());
 
     return;
 }
@@ -808,6 +923,8 @@ void test_motor_stop_to_stop(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[1]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[1]);
 
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, motor.get_motor_command());
+
 
     // Stop
     motor.stop();
@@ -826,6 +943,8 @@ void test_motor_stop_to_stop(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_set_duty_fake.arg1_history[3]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_1, ledc_update_duty_fake.arg1_history[3]);
+
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, motor.get_motor_command());
 
     return;
 }

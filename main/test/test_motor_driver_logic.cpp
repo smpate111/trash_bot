@@ -11,10 +11,10 @@
     ============================================================
 */
 
-#include <motors/motor.hpp>
-#include <motors/motor_driver.hpp>
+#include "motors/motor.hpp"
+#include "motors/motor_driver.hpp"
 
-#include <test/mock_libraries/mock_hardware.hpp>
+#include "mock_libraries/mock_hardware.hpp"
 
 //  ============================================================
 
@@ -41,6 +41,10 @@ void test_motor_driver_hardware_initialization(void) {
     Motor_Driver driver(d_config);
 
     TEST_ASSERT_TRUE(driver.is_initialized());
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
     return;
 }
 //  ============================================================
@@ -70,6 +74,10 @@ void test_motor_driver_initialization_left_motor_failure(void) {
     Motor_Driver driver(d_config);
 
     TEST_ASSERT_FALSE(driver.is_initialized());
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
     return;
 }
 //  ============================================================
@@ -99,6 +107,10 @@ void test_motor_driver_initialization_right_motor_failure(void) {
     Motor_Driver driver(d_config);
 
     TEST_ASSERT_FALSE(driver.is_initialized());
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
     return;
 }
 //  ============================================================
@@ -144,6 +156,104 @@ void test_motor_driver_commands_lockout_after_initialization(void) {
 
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.call_count);
     TEST_ASSERT_EQUAL(0, ledc_update_duty_fake.call_count);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the Motor_Driver's commands are locked out when
+    runtime failure occurs.
+    ============================================================
+*/
+void test_motor_driver_enters_fault_after_ledc_set_failure(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    TEST_ASSERT_TRUE(l_motor.is_initialized());
+    TEST_ASSERT_TRUE(r_motor.is_initialized());
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+
+    TEST_ASSERT_TRUE(driver.is_initialized());
+
+    TEST_ASSERT_EQUAL(4, gpio_reset_pin_fake.call_count);
+    TEST_ASSERT_EQUAL(4, gpio_set_direction_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_channel_config_fake.call_count);
+
+    driver.set_left_duty_cycle(100);
+    driver.set_right_duty_cycle(100);
+
+    ledc_set_duty_fake.return_val = ESP_FAIL;
+    driver.forward();
+
+    TEST_ASSERT_TRUE(driver.is_faulted());
+    TEST_ASSERT_FALSE(driver.is_initialized());
+    TEST_ASSERT_EQUAL(0, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL(0, driver.get_right_duty_cycle());
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
+
+    return;
+}
+//  ============================================================
+
+
+
+/*
+    ============================================================
+    Test that the Motor_Driver's commands are locked out when
+    runtime failure occurs.
+    ============================================================
+*/
+void test_motor_driver_enters_fault_after_ledc_update_failure(void) {
+    // Create the motor objects.
+    Motor_Config l_config = {"Left Motor", GPIO_NUM_11, GPIO_NUM_12, LEDC_CHANNEL_0, LEDC_CHANNEL_1};
+    Motor_Config r_config = {"Right Motor", GPIO_NUM_13, GPIO_NUM_14, LEDC_CHANNEL_2, LEDC_CHANNEL_3};
+    Motor l_motor(l_config);
+    Motor r_motor(r_config);
+
+    TEST_ASSERT_TRUE(l_motor.is_initialized());
+    TEST_ASSERT_TRUE(r_motor.is_initialized());
+
+    // Create the motor driver objects.
+    Driver_Config d_config = {"Driver", l_motor, r_motor};
+    Motor_Driver driver(d_config);
+
+    TEST_ASSERT_TRUE(driver.is_initialized());
+
+    TEST_ASSERT_EQUAL(4, gpio_reset_pin_fake.call_count);
+    TEST_ASSERT_EQUAL(4, gpio_set_direction_fake.call_count);
+    TEST_ASSERT_EQUAL(4, ledc_channel_config_fake.call_count);
+
+    driver.set_left_duty_cycle(100);
+    driver.set_right_duty_cycle(100);
+
+    ledc_update_duty_fake.return_val = ESP_FAIL;
+    driver.backward();
+
+    TEST_ASSERT_TRUE(driver.is_faulted());
+    TEST_ASSERT_FALSE(driver.is_initialized());
+    TEST_ASSERT_EQUAL(0, driver.get_left_duty_cycle());
+    TEST_ASSERT_EQUAL(0, driver.get_right_duty_cycle());
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
 
     return;
 }
@@ -249,6 +359,10 @@ void test_motor_driver_forward(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
+
     return;
 }
 //  ============================================================
@@ -303,6 +417,10 @@ void test_motor_driver_backward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
     TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -359,6 +477,10 @@ void test_motor_driver_left_turn(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
+
     return;
 }
 //  ============================================================
@@ -414,6 +536,10 @@ void test_motor_driver_right_turn(void) {
     TEST_ASSERT_EQUAL(255, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
+
     return;
 }
 //  ============================================================
@@ -465,6 +591,10 @@ void test_motor_driver_stop(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[3]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
 
     return;
 }
@@ -520,6 +650,10 @@ void test_motor_driver_forward_to_forward(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -552,6 +686,10 @@ void test_motor_driver_forward_to_forward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -607,6 +745,10 @@ void test_motor_driver_forward_to_backward(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -639,6 +781,10 @@ void test_motor_driver_forward_to_backward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -694,6 +840,10 @@ void test_motor_driver_forward_to_left_turn(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -726,6 +876,10 @@ void test_motor_driver_forward_to_left_turn(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -781,6 +935,10 @@ void test_motor_driver_forward_to_right_turn(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -813,6 +971,10 @@ void test_motor_driver_forward_to_right_turn(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -868,6 +1030,10 @@ void test_motor_driver_forward_to_stop(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.stop();
@@ -897,6 +1063,10 @@ void test_motor_driver_forward_to_stop(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
 
     return;
 }
@@ -952,6 +1122,10 @@ void test_motor_driver_backward_to_forward(void) {
     TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -984,6 +1158,10 @@ void test_motor_driver_backward_to_forward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -1039,6 +1217,10 @@ void test_motor_driver_backward_to_backward(void) {
     TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -1071,6 +1253,11 @@ void test_motor_driver_backward_to_backward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, driver.get_driver_command());
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -1126,6 +1313,10 @@ void test_motor_driver_backward_to_left_turn(void) {
     TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -1158,6 +1349,10 @@ void test_motor_driver_backward_to_left_turn(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -1213,6 +1408,10 @@ void test_motor_driver_backward_to_right_turn(void) {
     TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -1245,6 +1444,10 @@ void test_motor_driver_backward_to_right_turn(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -1300,6 +1503,10 @@ void test_motor_driver_backward_to_stop(void) {
     TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.stop();
@@ -1329,6 +1536,10 @@ void test_motor_driver_backward_to_stop(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
 
     return;
 }
@@ -1384,6 +1595,10 @@ void test_motor_driver_left_turn_to_forward(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -1416,6 +1631,10 @@ void test_motor_driver_left_turn_to_forward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -1471,6 +1690,10 @@ void test_motor_driver_left_turn_to_backward(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -1503,6 +1726,10 @@ void test_motor_driver_left_turn_to_backward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -1558,6 +1785,10 @@ void test_motor_driver_left_turn_to_left_turn(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -1590,6 +1821,10 @@ void test_motor_driver_left_turn_to_left_turn(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -1645,6 +1880,10 @@ void test_motor_driver_left_turn_to_right_turn(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -1677,6 +1916,10 @@ void test_motor_driver_left_turn_to_right_turn(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -1732,6 +1975,10 @@ void test_motor_driver_left_turn_to_stop(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.stop();
@@ -1761,6 +2008,10 @@ void test_motor_driver_left_turn_to_stop(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
 
     return;
 }
@@ -1816,6 +2067,10 @@ void test_motor_driver_right_turn_to_forward(void) {
     TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -1848,6 +2103,10 @@ void test_motor_driver_right_turn_to_forward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -1903,6 +2162,10 @@ void test_motor_driver_right_turn_to_backward(void) {
     TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -1935,6 +2198,10 @@ void test_motor_driver_right_turn_to_backward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -1990,6 +2257,10 @@ void test_motor_driver_right_turn_to_left_turn(void) {
     TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -2022,6 +2293,10 @@ void test_motor_driver_right_turn_to_left_turn(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -2077,6 +2352,10 @@ void test_motor_driver_right_turn_to_right_turn(void) {
     TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -2109,6 +2388,10 @@ void test_motor_driver_right_turn_to_right_turn(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -2164,6 +2447,10 @@ void test_motor_driver_right_turn_to_stop(void) {
     TEST_ASSERT_EQUAL(123, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.stop();
@@ -2193,6 +2480,10 @@ void test_motor_driver_right_turn_to_stop(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
 
     return;
 }
@@ -2245,6 +2536,10 @@ void test_motor_driver_stop_to_forward(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -2277,6 +2572,10 @@ void test_motor_driver_stop_to_forward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::FORWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -2329,6 +2628,10 @@ void test_motor_driver_stop_to_backward(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -2361,6 +2664,10 @@ void test_motor_driver_stop_to_backward(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::BACKWARD, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -2413,6 +2720,10 @@ void test_motor_driver_stop_to_left_turn(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -2445,6 +2756,10 @@ void test_motor_driver_stop_to_left_turn(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::LEFT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -2497,6 +2812,10 @@ void test_motor_driver_stop_to_right_turn(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.set_left_duty_cycle(231);
@@ -2529,6 +2848,10 @@ void test_motor_driver_stop_to_right_turn(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(231, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::RIGHT_TURN, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::FORWARD, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::BACKWARD, driver.get_right_motor_command());
 
     return;
 }
@@ -2581,6 +2904,10 @@ void test_motor_driver_stop_to_stop(void) {
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[3]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[3]);
 
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
+
 
     // Verify the duty cycle value gets updated.
     driver.stop();
@@ -2610,6 +2937,10 @@ void test_motor_driver_stop_to_stop(void) {
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_set_duty_fake.arg1_history[7]);
     TEST_ASSERT_EQUAL(0, ledc_set_duty_fake.arg2_history[7]);
     TEST_ASSERT_EQUAL(LEDC_CHANNEL_3, ledc_update_duty_fake.arg1_history[7]);
+
+    TEST_ASSERT_EQUAL(Motor_Driver_Command::STOP, driver.get_driver_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_left_motor_command());
+    TEST_ASSERT_EQUAL(Motor_Command::STOP, driver.get_right_motor_command());
 
     return;
 }
