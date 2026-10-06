@@ -21,6 +21,7 @@
 
 //#include <test/test_wheel_encoder_logic.cpp>
 #include "test_wheel_encoder_logic.cpp"
+#include "test_ultrasonic_logic.cpp"
 //#include <test/test_ultrasonic_logic.cpp>
 
 //#include <test/test_drive_train_logic.cpp>
@@ -59,8 +60,8 @@ DEFINE_FAKE_VALUE_FUNC(int64_t, esp_timer_get_time);
 //DEFINE_FAKE_VALUE_FUNC(BaseType_t, xQueueReceive, QueueHandle_t, void*, TickType_t);
 //DEFINE_FAKE_VALUE_FUNC(BaseType_t, xQueueReset, QueueHandle_t);
 //DEFINE_FAKE_VALUE_FUNC(BaseType_t, xTaskCreate, TaskFunction_t, const char*, uint32_t, void*, UBaseType_t, TaskHandle_t*);
-//DEFINE_FAKE_VALUE_FUNC(TickType_t, xTaskGetTickCount);
-//DEFINE_FAKE_VOID_FUNC(vTaskDelay, TickType_t);
+DEFINE_FAKE_VALUE_FUNC(TickType_t, xTaskGetTickCount);
+DEFINE_FAKE_VOID_FUNC(vTaskDelay, TickType_t);
 
 
 
@@ -228,7 +229,7 @@ extern "C" void app_main(void) {
     RUN_TEST(test_wheel_encoder_initialization_invalid_diameter);
     RUN_TEST(test_wheel_encoder_initialization_gpio_config_failure);
     RUN_TEST(test_wheel_encoder_initialization_isr_failure);
-    RUN_TEST(test_wheel_encoder_commands_lockout_after_initialization);
+    RUN_TEST(test_wheel_encoder_commands_lockout_after_initialization_failure);
 
     RUN_TEST(test_wheel_encoder_pulse_count);
 
@@ -277,6 +278,20 @@ extern "C" void app_main(void) {
     RUN_TEST(test_drive_train_stop_to_left_turn);
     RUN_TEST(test_drive_train_stop_to_right_turn);
     RUN_TEST(test_drive_train_stop_to_stop);
+
+    // Test the ultrasonic component.
+    RUN_TEST(test_ultrasonic_hardware_initialization);
+    RUN_TEST(test_ultrasonic_initialization_gpio_reset_failure);
+    RUN_TEST(test_ultrasonic_initialization_gpio_direction_failure);
+    RUN_TEST(test_ultrasonic_initialization_identical_GPIO_pins);
+    RUN_TEST(test_ultrasonic_initialization_isr_failure);
+
+    RUN_TEST(test_ultrasonic_commands_lockout_after_initialization_failure);
+
+    RUN_TEST(test_ultrasonic_distance_calculation);
+    RUN_TEST(test_ultrasonic_measure_distance);
+    RUN_TEST(test_ultrasonic_measure_distance_timeout);
+    RUN_TEST(test_ultrasonic_isr_ignores_echo_signal);
 
 
     // Test the components.

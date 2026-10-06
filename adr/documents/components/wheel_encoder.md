@@ -19,7 +19,7 @@
 6. Calculating wheel travel distance from pulse count, wheel diameter, and encoder resolution.
 7. Maintaining a safe initial sensor state.
 
-## 3. Not responsible for
+## 3. Not Responsible For
 
 `Wheel_Encoder` is not responsible for:
 1. Determining where the robot should move.

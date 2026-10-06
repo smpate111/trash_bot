@@ -4,7 +4,7 @@
 
 /*
     ============================================================
-    Include the Wheel Encoderclass header file to access the
+    Include the Wheel Encoder class header file to access the
     class's methods and variables.
     ============================================================
 */

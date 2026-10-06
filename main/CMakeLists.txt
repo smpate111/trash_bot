@@ -9,7 +9,7 @@ if (IDF_TARGET STREQUAL "linux")
             "motors/motor.cpp"
             "motors/motor_driver.cpp"
 
-            #"sensors/ultrasonic.cpp"
+            "sensors/ultrasonic.cpp"
             "sensors/wheel_encoder.cpp"
 
             "test/test_main.cpp"
@@ -18,7 +18,7 @@ if (IDF_TARGET STREQUAL "linux")
             "test/test_motor_driver_logic.cpp"
             
             "test/test_wheel_encoder_logic.cpp"
-            #"test/test_ultrasonic_logic.cpp"
+            "test/test_ultrasonic_logic.cpp"
 
             "test/test_drive_train_logic.cpp"
             #"test/test_robot_controller_logic.cpp"
@@ -44,7 +44,7 @@ else()
             "motors/motor.cpp"
             "motors/motor_driver.cpp"
 
-            #"sensors/ultrasonic.cpp"
+            "sensors/ultrasonic.cpp"
             "sensors/wheel_encoder.cpp"
             
             "main.cpp"

@@ -8,7 +8,7 @@
     the class's methods and variables.
     ============================================================
 */
-#include <../include/sensors/ultrasonic.hpp>
+#include "sensors/ultrasonic.hpp"
 //  ============================================================
 
 
@@ -19,13 +19,41 @@
     the ultrasonic sensor with user-defined values.
     ============================================================
 */
-Ultrasonic::Ultrasonic(const Ultrasonic_Config &ultrasonic_setup) : config(ultrasonic_setup) {
-
+Ultrasonic_Sensor::Ultrasonic_Sensor(const Ultrasonic_Config &ultrasonic_setup) : config(ultrasonic_setup) {
+    if (config.echo_pin == config.trig_pin) {
+        ESP_LOGW(
+                config.name.c_str(),
+                "The trigger GPIO Pin [%d] and the echo GPIO Pin [%d] are the same. They must be different.",
+                config.trig_pin,
+                config.echo_pin
+            );
+        return;
+    }
+    
     // Set the ECHO and TRIG pins to input and output respectively.
-    gpio_reset_pin(config.trig_pin);
-    gpio_reset_pin(config.echo_pin);
-    gpio_set_direction(config.trig_pin, GPIO_MODE_OUTPUT);
-    gpio_set_direction(config.echo_pin, GPIO_MODE_INPUT);
+    esp_err_t err = gpio_reset_pin(config.trig_pin);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to reset the trigger GPIO Pin [%d].", config.trig_pin);
+        return;
+    }
+
+    err = gpio_reset_pin(config.echo_pin);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to reset the echo GPIO Pin [%d].", config.echo_pin);
+        return;
+    }
+
+    err = gpio_set_direction(config.trig_pin, GPIO_MODE_OUTPUT);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to configure the trigger GPIO Pin [%d] as output.", config.trig_pin);
+        return;
+    }
+
+    err = gpio_set_direction(config.echo_pin, GPIO_MODE_INPUT);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to configure the echo GPIO Pin [%d] as input.", config.echo_pin);
+        return;
+    }
 
     // Configure the TRIG pin.
     gpio_config_t trigger_config = {};
@@ -35,8 +63,17 @@ Ultrasonic::Ultrasonic(const Ultrasonic_Config &ultrasonic_setup) : config(ultra
     trigger_config.pull_down_en = GPIO_PULLDOWN_DISABLE;        // Disable the pull-down resistor.
     trigger_config.intr_type = GPIO_INTR_DISABLE;               // Disable the interrupt for this pin.
 
-    gpio_config(&trigger_config);
-    gpio_set_level(config.trig_pin, 0);    // Initially set the TRIG pin to low.
+    err = gpio_config(&trigger_config);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to configure ultrasonic sensor trigger GPIO.");
+        return;
+    }
+
+    err = gpio_set_level(config.trig_pin, 0);    // Initially set the TRIG pin to low.
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to set the trigger GPIO Pin [%d] to low [0].", config.trig_pin);
+        return;
+    }
 
     // Configure the ECHO pin.
     gpio_config_t echo_config = {};
@@ -46,46 +83,88 @@ Ultrasonic::Ultrasonic(const Ultrasonic_Config &ultrasonic_setup) : config(ultra
     echo_config.pull_down_en = GPIO_PULLDOWN_DISABLE;       // Disable the pull-down resistor.
     echo_config.intr_type = GPIO_INTR_ANYEDGE;              // Set the interrupt to trigger on both falling and rising edges.
 
-    gpio_config(&echo_config);
+    err = gpio_config(&echo_config);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to configure ultrasonic sensor echo GPIO.");
+        return;
+    }
+
+    err = gpio_isr_handler_add(config.echo_pin, isr_handler, this);
+    if (err != ESP_OK) {
+        ESP_LOGW(config.name.c_str(), "Failed to initialize ultrasonic sensor ISR.");
+        return;
+    }
 
     ESP_LOGI(
         config.name.c_str(),
-        "Initialized ultrasonic sensor on pins %d (TRIG) and %d (ECHO). Set TRIG pin to low.",
+        "Initialized ultrasonic sensor on trigger GPIO Pin [%d] and echo GPIO pin [%d], set trigger GPIO pin to low, and initialized ISR.",
         config.trig_pin,
         config.echo_pin
     );
 
-    gpio_isr_handler_add(config.echo_pin, isr_handler, this);
-    ESP_LOGI(config.name.c_str(), "Initialized ISR for ultrasonic sensor.");
+    
+    state = Ultrasonic_State::READY;
 }
+//  ============================================================
 
 
 /*
     ============================================================
-    Interrupt Service Routing that records the signal
-    from the trigger to hitting the detected to the signal
-    coming back to the sensor. This will allow us to record
-    the distance from the sensor to the object.
+    Retrieves the initialized boolean.
     ============================================================
 */
-void IRAM_ATTR Ultrasonic::isr_handler(void *arg) {
-    Ultrasonic *us = static_cast<Ultrasonic*>(arg);
+bool Ultrasonic_Sensor::is_initialized() const {
+    return state == Ultrasonic_State::READY;
+}
+//  ============================================================
 
-    uint32_t now = (uint32_t)esp_timer_get_time();
-    int level = gpio_get_level(us->get_echo_pin());
 
-    // Start recording the time when ECHO pin is high.
+/*
+    ============================================================
+    Retrieves the faulted boolean.
+    ============================================================
+*/
+bool Ultrasonic_Sensor::is_faulted() const {
+    return state == Ultrasonic_State::FAULT;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Interrupt Service Routine that performs distance measurement
+    through recording ECHO signal duration.
+    ============================================================
+*/
+void IRAM_ATTR Ultrasonic_Sensor::isr_handler(void *arg) {
+    auto *us = static_cast<Ultrasonic_Sensor*>(arg);
+
+    // Return if the distance measurement is not active.
+    if (!us->measurement_active.load(std::memory_order_acquire)) {
+        return;
+    }
+
+
+    // Start ECHO signal timer.
+    int64_t now_us = static_cast<int64_t>(esp_timer_get_time());
+    
+    // Record the start time and return if the ECHO pin is HIGH.
+    int level = gpio_get_level(us->config.echo_pin);
     if (level == 1) {
-        us->set_start_echo_time(now);
+        us->echo_start_time_us.store(now_us, std::memory_order_relaxed);
+        return;
     }
-    // Stop recording the time and calculate the object's distance when ECHO pin is low.
-    else {
-        if (us->get_start_echo_time() > 0) {
-            uint32_t duration = now - us->get_start_echo_time();
-            us->set_distance((static_cast<double>(duration) * 0.343) / 2.0);
-            us->set_start_echo_time(0);
-        }
+
+    // Calculate the ECHO signal duration.
+    int64_t start_us = us->echo_start_time_us.load(std::memory_order_relaxed);
+    if (start_us == 0) {
+        return;
     }
+
+    int64_t duration_us = now_us - start_us;
+    us->echo_duration_us.store(duration_us, std::memory_order_release);
+    us->echo_start_time_us.store(0, std::memory_order_relaxed);
+    us->measurement_active.store(false, std::memory_order_release);
 
     return;
 }
@@ -99,40 +178,138 @@ void IRAM_ATTR Ultrasonic::isr_handler(void *arg) {
     the interrupt service routine.
     ============================================================
 */
-void Ultrasonic::measure_distance() {
-    // Check if we are testing so that we don't get stuck in an infinite loop.
-    if (is_testing == true) {
-        return;
+bool Ultrasonic_Sensor::measure_distance() {
+    if (state == Ultrasonic_State::UNINITIALIZED) {
+        ESP_LOGW(config.name.c_str(), "Ultrasonic sensor is not initialized. Ignoring measure_distance().");
+        return false;
+    }
+    else if (state == Ultrasonic_State::FAULT) {
+        ESP_LOGW(config.name.c_str(), "Ultrasonic sensor is in fault state. Ignoring measure_distance().");
+        return false;
     }
 
-    // Reset ECHO signal duration before sending new signal.
-    set_start_echo_time(0);
-    set_distance(-1.0);
+    // Reset variables that perform distance measurement.
+    bool measurement_reset = reset_measurement();
+    if (measurement_reset == false) {
+        return false;
+    }
 
-    // Send TRIG pulse for 10us. This will trigger the ISR above.
-    gpio_set_level(get_trig_pin(), 1);
+
+    // Trigger the ultrasonic sensor.
+    bool is_triggered = trigger_sensor();
+    if (is_triggered == false) {
+        return false;
+    }
+
+
+    // Wait for the ISR to finish measuring the ECHO signal duration.
+    bool echo_returned = wait_for_echo();
+    if (echo_returned == false) {
+        return false;
+    }
+
+
+    // Measure distance of the object from the robot.
+    int64_t duration_us = echo_duration_us.load(std::memory_order_acquire);
+    double distance_calculated = calculate_distance(duration_us);
+    if (distance_calculated == -1.0) {
+        return false;
+    }
+
+    return true;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Reset the variables used to perform distance measurement.
+    ============================================================
+*/
+bool Ultrasonic_Sensor::reset_measurement() {
+    if (measurement_active.load(std::memory_order_acquire)) {
+        ESP_LOGE(config.name.c_str(), "Distance measurement is already in progress.");
+        return false;
+    }
+
+    echo_start_time_us.store(0, std::memory_order_relaxed);
+    echo_duration_us.store(0, std::memory_order_relaxed);
+    distance_mm = -1.0;
+    measurement_active.store(true, std::memory_order_release);
+
+    return true;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Trigger a valid pulse from the ultrasonic sensor for 10
+    microseconds.
+    ============================================================
+*/
+bool Ultrasonic_Sensor::trigger_sensor() {
+    esp_err_t err = gpio_set_level(config.trig_pin, 1);
+    if (err != ESP_OK) {
+        measurement_active.store(false, std::memory_order_release);
+        enter_fault("Trigger Pin: gpio_set_level(HIGH)", err);
+        return false;
+    }
+
     esp_rom_delay_us(10);
-    gpio_set_level(get_trig_pin(), 0);
 
-    // Calculate timeout in ticks.
-    TickType_t timeout_ticks = pdMS_TO_TICKS(30);
+    err = gpio_set_level(config.trig_pin, 0);
+    if (err != ESP_OK) {
+        measurement_active.store(false, std::memory_order_release);
+        enter_fault("Trigger Pin: gpio_set_level(LOW)", err);
+        return false;
+    }
+
+    return true;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Wait for the ECHO signal to return.
+    ============================================================
+*/
+bool Ultrasonic_Sensor::wait_for_echo() {
     TickType_t start_tick = xTaskGetTickCount();
+    while (measurement_active.load(std::memory_order_acquire)) {
+        // Return if ECHO signal was lost.
+        if ((xTaskGetTickCount() - start_tick) >= pdMS_TO_TICKS(MEASUREMENT_TIMEOUT_MS)) {
+            measurement_active.store(false, std::memory_order_release);
+            distance_mm = -1.0;
+            ESP_LOGI(config.name.c_str(), "Signal timed out by either being lost or went out of range.");
+            return false;
+        }
 
-    // Sleep until the ISR calculates a positive distance or we reach timeout.
-    while ((get_distance() < 0) && (xTaskGetTickCount() - start_tick < timeout_ticks)) {
         vTaskDelay(1);
     }
 
-    // Print log based on whether timeout was reached or we detected an object.
-    if (get_distance() < 0) {
-        set_distance(-1.0);
-        ESP_LOGI(config.name.c_str(), "Signal was lost or out of range.");
-    }
-    else {
-        ESP_LOGI(config.name.c_str(), "Object detected at %0.4fmm.", get_distance());
+    return true;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Calculate the object's distance from the robot.
+    ============================================================
+*/
+double Ultrasonic_Sensor::calculate_distance(int64_t duration_us) {
+    if (duration_us == 0) {
+        distance_mm = -1.0;
+        ESP_LOGI(config.name.c_str(), "Signal timed out by either being lost or went out of range. Resetting distance.");
+        return distance_mm;
     }
 
-    return;
+    distance_mm = (static_cast<double>(duration_us) * SPEED_OF_SOUND_MM_PER_US) / 2.0;
+    ESP_LOGI(config.name.c_str(), "Object detected at [%0.4fmm].", distance_mm);
+
+    return distance_mm;
 }
 //  ============================================================
 
@@ -142,20 +319,8 @@ void Ultrasonic::measure_distance() {
     Retrieve calculated distance.
     ============================================================
 */
-double Ultrasonic::get_distance() {
-    return distance;
-}
-//  ============================================================
-
-
-/*
-    ============================================================
-    Record calculated distance.
-    ============================================================
-*/
-void Ultrasonic::set_distance(double dist) {
-    distance = dist;
-    return;
+double Ultrasonic_Sensor::get_distance() const {
+    return distance_mm;
 }
 //  ============================================================
 
@@ -165,8 +330,8 @@ void Ultrasonic::set_distance(double dist) {
     Retrieve echo's start time.
     ============================================================
 */
-uint32_t Ultrasonic::get_start_echo_time() {
-    return start_echo_time;
+int64_t Ultrasonic_Sensor::get_echo_start_time() const{
+    return echo_start_time_us;
 }
 //  ============================================================
 
@@ -176,8 +341,8 @@ uint32_t Ultrasonic::get_start_echo_time() {
     Record echo's start time.
     ============================================================
 */
-void Ultrasonic::set_start_echo_time(uint32_t time) {
-    start_echo_time = time;
+void Ultrasonic_Sensor::set_echo_start_time(int64_t time) {
+    echo_start_time_us = time;
     return;
 }
 //  ============================================================
@@ -188,7 +353,7 @@ void Ultrasonic::set_start_echo_time(uint32_t time) {
     Retrieve echo pin.
     ============================================================
 */
-gpio_num_t Ultrasonic::get_echo_pin() {
+gpio_num_t Ultrasonic_Sensor::get_echo_pin() {
     return config.echo_pin;
 }
 //  ============================================================
@@ -199,7 +364,33 @@ gpio_num_t Ultrasonic::get_echo_pin() {
     Retrieve trig pin.
     ============================================================
 */
-gpio_num_t Ultrasonic::get_trig_pin() {
+gpio_num_t Ultrasonic_Sensor::get_trig_pin() {
     return config.trig_pin;
+}
+//  ============================================================
+
+
+/*
+    ============================================================
+    Enters the ultrasonic sensor into a fault state if an error
+    occurs after initialization.
+    ============================================================
+*/
+void Ultrasonic_Sensor::enter_fault(const char* operation, esp_err_t err) {
+    ESP_LOGE(
+        config.name.c_str(),
+        "Ultrasonic sensor hardware failure during: [%s]. ESP error: [%s]. Entering fault state.",
+        operation,
+        esp_err_to_name(err)
+    );
+
+    state = Ultrasonic_State::FAULT;
+    distance_mm = -1.0;
+    measurement_active.store(false, std::memory_order_release);
+
+    // Set TRIG pin to LOW as best effort.
+    gpio_set_level(config.trig_pin, 0);
+
+    return;
 }
 //  ============================================================

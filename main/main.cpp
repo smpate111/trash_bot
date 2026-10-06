@@ -25,7 +25,7 @@
 #include "motors/motor_driver.hpp"
 
 #include "sensors/wheel_encoder.hpp"
-//#include <../include/sensors/ultrasonic.hpp>
+#include "sensors/ultrasonic.hpp"
 //  ============================================================
 
 
@@ -164,6 +164,18 @@ void app_main(void) {
     // Initialize the drive train.
     Drive_Train d_train(dt_config);
 
+    // Configure the ultrasonic sensors.
+    Ultrasonic_Config fus_config = {"Front Ultrasonic Sensor", GPIO_NUM_2, GPIO_NUM_42};
+    Ultrasonic_Config bus_config = {"Back Ultrasonic Sensor", GPIO_NUM_5, GPIO_NUM_4};
+    Ultrasonic_Config lus_config = {"Left Ultrasonic Sensor", GPIO_NUM_18, GPIO_NUM_17};
+    Ultrasonic_Config rus_config = {"Right Ultrasonic Sensor", GPIO_NUM_9, GPIO_NUM_10};
+
+    // Initialize the ultrasonic sensors.
+    Ultrasonic_Sensor f_us(fus_config);
+    Ultrasonic_Sensor b_us(bus_config);
+    Ultrasonic_Sensor l_us(lus_config);
+    Ultrasonic_Sensor r_us(rus_config);
+
     /*
     vTaskDelay(pdMS_TO_TICKS(2000));
 
@@ -193,63 +205,99 @@ void app_main(void) {
     
     vTaskDelay(pdMS_TO_TICKS(2000));
 
+
     d_train.reset_encoder_counts();
     d_train.set_left_duty_cycle(255);
     d_train.set_right_duty_cycle(255);
     
     d_train.forward();
+    for (int i = 0; i < 40; i++) {
+        (void)f_us.measure_distance();  // Ignore the return value as we don't need it here.
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
 
-    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    //vTaskDelay(pdMS_TO_TICKS(2000));
+
 
     d_train.stop();
     ESP_LOGI("Main", "Left Wheel Distance traveled: [%0.4fmm].", d_train.get_left_distance());
     ESP_LOGI("Main", "Right Wheel Distance traveled: [%0.4fmm].", d_train.get_right_distance());
+    ESP_LOGI("Main", "Final Front Ultrasonic Distance: [%0.4fmm].", f_us.get_distance());
     d_train.reset_encoder_counts();
 
+
     vTaskDelay(pdMS_TO_TICKS(2000));
+
 
     d_train.reset_encoder_counts();
     d_train.set_left_duty_cycle(215);
     d_train.set_right_duty_cycle(215);
 
     d_train.backward();
+    for (int i = 0; i < 40; i++) {
+        (void)b_us.measure_distance();  // Ignore the return value as we don't need it here.
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+
 
     vTaskDelay(pdMS_TO_TICKS(2000));
+
 
     d_train.stop();
     ESP_LOGI("Main", "Left Wheel Distance traveled: [%0.4fmm].", d_train.get_left_distance());
     ESP_LOGI("Main", "Right Wheel Distance traveled: [%0.4fmm].", d_train.get_right_distance());
+    ESP_LOGI("Main", "Final Back Ultrasonic Distance: [%0.4fmm].", b_us.get_distance());
     d_train.reset_encoder_counts();
 
+
     vTaskDelay(pdMS_TO_TICKS(2000));
+
 
     d_train.reset_encoder_counts();
     d_train.set_left_duty_cycle(190);
     d_train.set_right_duty_cycle(190);
 
     d_train.left_turn();
+    for (int i = 0; i < 40; i++) {
+        (void)l_us.measure_distance();  // Ignore the return value as we don't need it here.
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+
 
     vTaskDelay(pdMS_TO_TICKS(2000));
+
 
     d_train.stop();
     ESP_LOGI("Main", "Left Wheel Distance traveled: [%0.4fmm].", d_train.get_left_distance());
     ESP_LOGI("Main", "Right Wheel Distance traveled: [%0.4fmm].", d_train.get_right_distance());
+    ESP_LOGI("Main", "Final Left Ultrasonic Distance: [%0.4fmm].", l_us.get_distance());
     d_train.reset_encoder_counts();
 
+
     vTaskDelay(pdMS_TO_TICKS(2000));
+
 
     d_train.reset_encoder_counts();
     d_train.set_left_duty_cycle(155);
     d_train.set_right_duty_cycle(155);
 
     d_train.right_turn();
+    for (int i = 0; i < 40; i++) {
+        (void)r_us.measure_distance();  // Ignore the return value as we don't need it here.
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+
 
     vTaskDelay(pdMS_TO_TICKS(2000));
+
 
     d_train.stop();
     ESP_LOGI("Main", "Left Wheel Distance traveled: [%0.4fmm].", d_train.get_left_distance());
     ESP_LOGI("Main", "Right Wheel Distance traveled: [%0.4fmm].", d_train.get_right_distance());
+    ESP_LOGI("Main", "Final Right Ultrasonic Distance: [%0.4fmm].", r_us.get_distance());
     d_train.reset_encoder_counts();
+
 
     vTaskDelay(pdMS_TO_TICKS(2000));
     

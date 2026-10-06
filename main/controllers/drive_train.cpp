@@ -521,6 +521,18 @@ bool Drive_Train::has_motor_driver_fault() const {
 
 /*
     ============================================================
+    Determine if 1 of the 2 wheel encoders entered into a fault
+    state.
+    ============================================================
+*/
+bool Drive_Train::has_encoder_fault() const {
+    return config.Left_Encoder.is_faulted() || config.Right_Encoder.is_faulted();
+}
+//  ============================================================
+
+
+/*
+    ============================================================
     Enters the drive train into a fault state if an error
     occurs after initialization.
     ============================================================

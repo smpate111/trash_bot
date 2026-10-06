@@ -247,7 +247,7 @@ void test_wheel_encoder_initialization_isr_failure(void) {
     initialization failed.
     ============================================================
 */
-void test_wheel_encoder_commands_lockout_after_initialization(void) {
+void test_wheel_encoder_commands_lockout_after_initialization_failure(void) {
     // Configure the fake GPIO reset function to fail.
     gpio_reset_pin_fake.return_val = ESP_FAIL;
 
